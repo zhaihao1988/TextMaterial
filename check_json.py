@@ -1,6 +1,6 @@
 import json
 
-with open("sutra_db.json", encoding="utf-8") as f:
+with open("tanjing.json", encoding="utf-8") as f:
     data = json.load(f)
 
 print(len(data))

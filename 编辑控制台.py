@@ -71,7 +71,22 @@ class EditorApp:
         ttk.Button(top, text="下一条", command=self._next).pack(side=tk.LEFT, padx=2)
         self.index_label = ttk.Label(top, text="0 / 0")
         self.index_label.pack(side=tk.LEFT, padx=12)
+
+        # 全局序号跳转
+        ttk.Label(top, text="跳转到第").pack(side=tk.LEFT, padx=(8, 2))
+        self.goto_entry = ttk.Entry(top, width=6)
+        self.goto_entry.pack(side=tk.LEFT)
+        ttk.Label(top, text="条").pack(side=tk.LEFT, padx=(2, 2))
+        ttk.Button(top, text="跳转", command=self._goto_index).pack(side=tk.LEFT, padx=(2, 8))
+
+        # 按 sutra_title 精准查找
+        ttk.Label(top, text="sutra_title：").pack(side=tk.LEFT, padx=(4, 2))
+        self.search_entry = ttk.Entry(top, width=20)
+        self.search_entry.pack(side=tk.LEFT)
+        ttk.Button(top, text="查找", command=self._search_by_sutra_title).pack(side=tk.LEFT, padx=(2, 8))
+
         ttk.Button(top, text="保存到 tanjing.json", command=self._save).pack(side=tk.LEFT, padx=2)
+        ttk.Button(top, text="删除当前条目", command=self._delete_current_entry).pack(side=tk.LEFT, padx=2)
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=2)
 
         # 选项卡：逐条编辑 | 整签 JSON
@@ -273,6 +288,98 @@ class EditorApp:
             self._refresh_index()
             self._show_entry()
             self._refresh_json_tab()
+
+    def _goto_index(self):
+        """根据顶部输入的全局序号跳转到对应条目（1～N）。"""
+        if not self.data:
+            return
+        text = self.goto_entry.get().strip() if hasattr(self, "goto_entry") else ""
+        if not text:
+            return
+        try:
+            num = int(text)
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的整数序号")
+            return
+        n = len(self.data)
+        if not (1 <= num <= n):
+            messagebox.showerror("错误", f"序号超出范围：1～{n}")
+            return
+        # 先把当前修改同步并保存，再跳转
+        self._save()
+        self.current_index = num - 1
+        self._refresh_index()
+        self._show_entry()
+        self._refresh_json_tab()
+
+    def _search_by_sutra_title(self):
+        """按 sutra_title 精准匹配查找并跳转到对应条目。"""
+        if not self.data:
+            return
+        title = self.search_entry.get().strip() if hasattr(self, "search_entry") else ""
+        if not title:
+            return
+        # 先保存当前修改
+        self._save()
+        found_index = None
+        for i, item in enumerate(self.data):
+            if item.get("sutra_title", "") == title:
+                found_index = i
+                break
+        if found_index is None:
+            messagebox.showinfo("未找到", f"未找到 sutra_title 为：{title} 的条目")
+            return
+        self.current_index = found_index
+        self._refresh_index()
+        self._show_entry()
+        self._refresh_json_tab()
+
+    def _delete_current_entry(self):
+        """删除当前条目（需弹窗确认）。"""
+        if not self.data:
+            return
+        entry = self._get_entry() or {}
+        title = entry.get("sutra_title", "")
+        n = len(self.data)
+        idx = self.current_index
+        hint = f"（sutra_title：{title}）" if title else ""
+        ok = messagebox.askyesno(
+            "确认删除",
+            f"确定要删除第 {idx + 1} / {n} 条{hint}吗？\n\n此操作会立即写回 tanjing.json，且不可撤销。",
+        )
+        if not ok:
+            return
+
+        # 先保存当前修改，再删除
+        self._sync_current_tab_to_data()
+        try:
+            del self.data[idx]
+            if not self.data:
+                save_json(self.data)
+                self.current_index = 0
+                self.index_label.config(text="0 / 0")
+                for key, w in self.widgets.items():
+                    if key in SHORT_FIELDS:
+                        w.delete(0, tk.END)
+                    else:
+                        w.delete("1.0", tk.END)
+                if self.json_text is not None:
+                    self.json_text.delete("1.0", tk.END)
+                self.status.config(text="已删除，当前无条目", foreground="green")
+                self.root.after(2000, lambda: self.status.config(text=""))
+                return
+
+            if self.current_index >= len(self.data):
+                self.current_index = len(self.data) - 1
+            save_json(self.data)
+            self._refresh_index()
+            self._show_entry()
+            self._refresh_json_tab()
+            self.status.config(text="已删除当前条目并保存", foreground="green")
+            self.root.after(2000, lambda: self.status.config(text=""))
+        except Exception as e:
+            messagebox.showerror("删除失败", str(e))
+            self.status.config(text=str(e), foreground="red")
 
     def _on_close(self):
         self.root.quit()
