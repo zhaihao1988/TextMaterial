@@ -24,6 +24,7 @@ import json
 import os
 import random
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -34,6 +35,7 @@ from tkinter import ttk, messagebox
 ROOT_DIR = Path(__file__).resolve().parent.parent
 TANJING_PATH = ROOT_DIR / "tanjing.json"
 SYSTEM_PROMPT_PATH = ROOT_DIR / "系统提示词.md"
+FEEDBACK_LOG_PATH = ROOT_DIR / "mapping" / "feedback_log.jsonl"
 
 
 def load_system_prompts(path: Path) -> Dict[str, Dict[str, Dict[str, str]]]:
@@ -194,6 +196,14 @@ class BlindDrawApp(tk.Tk):
         self.var_option = tk.StringVar()  # "A" / "B" / "C"
         self.var_req_key = tk.StringVar()
 
+        # 反馈相关变量
+        self.var_hit_score = tk.StringVar(value="3")
+        self.var_analysis_quality = tk.StringVar(value="3")
+        self.var_blind_safe_suggestion = tk.StringVar(value="keep")
+
+        # 最近一次抽中的签文
+        self.last_result_item: Dict[str, Any] | None = None
+
         self._build_widgets()
         if self.scene_order:
             self.var_scene.set(self.scene_order[0])
@@ -246,12 +256,76 @@ class BlindDrawApp(tk.Tk):
         result_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         ttk.Label(result_frame, text="抽签结果：").pack(anchor="w")
-        self.text_result = tk.Text(result_frame, wrap="word", height=25)
-        self.text_result.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.text_result = tk.Text(result_frame, wrap="word", height=18)
+        self.text_result.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(result_frame, command=self.text_result.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.text_result.configure(yscrollcommand=scrollbar.set)
+
+        # 反馈区域
+        feedback_frame = ttk.LabelFrame(self, text="反馈（用于后续学习，不影响当前抽签逻辑）", padding=10)
+        feedback_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+
+        ttk.Label(feedback_frame, text="命中程度（1-5）：").grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=3
+        )
+        hit_combo = ttk.Combobox(
+            feedback_frame,
+            textvariable=self.var_hit_score,
+            values=["1", "2", "3", "4", "5"],
+            width=5,
+            state="readonly",
+        )
+        hit_combo.grid(row=0, column=1, sticky=tk.W, padx=5, pady=3)
+
+        ttk.Label(feedback_frame, text="解析质量（1-5）：").grid(
+            row=0, column=2, sticky=tk.W, padx=5, pady=3
+        )
+        analysis_combo = ttk.Combobox(
+            feedback_frame,
+            textvariable=self.var_analysis_quality,
+            values=["1", "2", "3", "4", "5"],
+            width=5,
+            state="readonly",
+        )
+        analysis_combo.grid(row=0, column=3, sticky=tk.W, padx=5, pady=3)
+
+        ttk.Label(feedback_frame, text="盲抽适配：").grid(
+            row=1, column=0, sticky=tk.W, padx=5, pady=3
+        )
+        ttk.Radiobutton(
+            feedback_frame,
+            text="保持现状",
+            variable=self.var_blind_safe_suggestion,
+            value="keep",
+        ).grid(row=1, column=1, sticky=tk.W, padx=5, pady=3)
+        ttk.Radiobutton(
+            feedback_frame,
+            text="应该可盲抽",
+            variable=self.var_blind_safe_suggestion,
+            value="should_be_blind_safe",
+        ).grid(row=1, column=2, sticky=tk.W, padx=5, pady=3)
+        ttk.Radiobutton(
+            feedback_frame,
+            text="不宜盲抽",
+            variable=self.var_blind_safe_suggestion,
+            value="should_not_be_blind_safe",
+        ).grid(row=1, column=3, sticky=tk.W, padx=5, pady=3)
+
+        ttk.Label(feedback_frame, text="备注：").grid(
+            row=2, column=0, sticky=tk.NW, padx=5, pady=3
+        )
+        self.text_comment = tk.Text(feedback_frame, wrap="word", height=4)
+        self.text_comment.grid(
+            row=2, column=1, columnspan=3, sticky=tk.EW, padx=5, pady=3
+        )
+        feedback_frame.columnconfigure(1, weight=1)
+        feedback_frame.columnconfigure(2, weight=1)
+        feedback_frame.columnconfigure(3, weight=1)
+
+        save_button = ttk.Button(feedback_frame, text="保存反馈", command=self.on_save_feedback)
+        save_button.grid(row=3, column=3, sticky=tk.E, padx=5, pady=5)
 
     def _on_scene_changed(self) -> None:
         scene = self.var_scene.get()
@@ -309,9 +383,50 @@ class BlindDrawApp(tk.Tk):
                 "在该路由键上未找到任何 blind_safe 且权重 > 0 的签文。",
             )
             return
+        self.last_result_item = result
         formatted = format_result(result)
         self.text_result.delete("1.0", tk.END)
         self.text_result.insert(tk.END, formatted)
+
+    def on_save_feedback(self) -> None:
+        if not self.last_result_item:
+            messagebox.showwarning("提示", "请先抽一签，再记录反馈。")
+            return
+
+        req_key = self.var_req_key.get()
+        source = self.last_result_item.get("source")
+        index = self.last_result_item.get("index")
+        try:
+            hit_score = int(self.var_hit_score.get())
+            analysis_quality = int(self.var_analysis_quality.get())
+        except ValueError:
+            messagebox.showwarning("提示", "命中程度和解析质量必须是数字。")
+            return
+        blind_safe_suggestion = self.var_blind_safe_suggestion.get()
+        comment = self.text_comment.get("1.0", tk.END).strip()
+
+        record = {
+            "source": source,
+            "index": index,
+            "req_key": req_key,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "hit_score": hit_score,
+            "analysis_quality": analysis_quality,
+            "blind_safe_suggestion": blind_safe_suggestion,
+            "comment": comment,
+        }
+
+        try:
+            FEEDBACK_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with FEEDBACK_LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False))
+                f.write("\n")
+        except Exception as e:
+            messagebox.showerror("错误", f"保存反馈失败：{e}")
+            return
+
+        messagebox.showinfo("成功", "反馈已记录到 feedback_log.jsonl。")
+        self.text_comment.delete("1.0", tk.END)
 
 
 def main() -> None:
