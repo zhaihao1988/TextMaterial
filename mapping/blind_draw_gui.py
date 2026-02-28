@@ -149,6 +149,25 @@ def blind_draw_once(
     return weighted_random_choice(candidates)
 
 
+def get_next_feedback_id() -> int:
+    """从 feedback_log.jsonl 中计算下一条反馈的 feedback_id（自增）。"""
+    next_id = 1
+    line_count = 0
+    if FEEDBACK_LOG_PATH.exists():
+        with FEEDBACK_LOG_PATH.open("r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    line_count += 1
+                try:
+                    data = json.loads(line)
+                    fid = data.get("feedback_id")
+                    if fid is not None:
+                        next_id = max(next_id, int(fid) + 1)
+                except (json.JSONDecodeError, ValueError, TypeError, KeyError):
+                    pass
+    return max(next_id, line_count + 1)
+
+
 def format_result(item: Dict[str, Any]) -> str:
     title = item.get("sutra_title", "")
     text = item.get("sutra_text", "")
@@ -204,31 +223,40 @@ class BlindDrawApp(tk.Tk):
         # 最近一次抽中的签文
         self.last_result_item: Dict[str, Any] | None = None
 
+        self.subscene_display_to_internal: Dict[str, str] = {}
+
         self._build_widgets()
-        if self.scene_order:
-            self.var_scene.set(self.scene_order[0])
-            self._on_scene_changed()
 
     def _build_widgets(self) -> None:
         top_frame = ttk.Frame(self, padding=10)
         top_frame.pack(side=tk.TOP, fill=tk.X)
 
-        ttk.Label(top_frame, text="大场景：").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.scene_combo = ttk.Combobox(
-            top_frame, textvariable=self.var_scene, values=self.scene_order, state="readonly"
-        )
-        self.scene_combo.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-        self.scene_combo.bind("<<ComboboxSelected>>", lambda e: self._on_scene_changed())
+        # 第一步：大场景选择
+        scene_frame = ttk.LabelFrame(top_frame, text="第一步：选择大场景", padding=10)
+        scene_frame.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N, padx=5, pady=5)
 
-        ttk.Label(top_frame, text="子场景：").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        self.subscene_combo = ttk.Combobox(
-            top_frame, textvariable=self.var_subscene, state="readonly"
-        )
-        self.subscene_combo.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-        self.subscene_combo.bind("<<ComboboxSelected>>", lambda e: self._on_subscene_changed())
+        self.scene_buttons: Dict[str, tk.Radiobutton] = {}
+        for i, scene in enumerate(self.scene_order):
+            rb = tk.Radiobutton(
+                scene_frame,
+                text=scene,
+                variable=self.var_scene,
+                value=scene,
+                anchor="w",
+                justify="left",
+                command=self._on_scene_changed,
+            )
+            rb.grid(row=i, column=0, sticky="w", pady=2)
+            self.scene_buttons[scene] = rb
 
-        option_frame = ttk.LabelFrame(top_frame, text="36 维短句（Option A/B/C）", padding=10)
-        option_frame.grid(row=0, column=2, rowspan=2, sticky=tk.W + tk.E + tk.N, padx=10, pady=5)
+        # 第二步：子场景选择（根据大场景动态生成）
+        self.subscene_frame = ttk.LabelFrame(top_frame, text="第二步：选择子场景", padding=10)
+        self.subscene_frame.grid(row=0, column=1, sticky=tk.W + tk.E + tk.N, padx=5, pady=5)
+        self.subscene_buttons: Dict[str, tk.Radiobutton] = {}
+
+        # 第三步：A/B/C 短句选择
+        option_frame = ttk.LabelFrame(top_frame, text="第三步：选择当前子场景下的 A/B/C", padding=10)
+        option_frame.grid(row=0, column=2, sticky=tk.W + tk.E + tk.N, padx=5, pady=5)
 
         self.option_buttons: Dict[str, tk.Radiobutton] = {}
         for i, letter in enumerate(["A", "B", "C"]):
@@ -239,6 +267,7 @@ class BlindDrawApp(tk.Tk):
                 value=letter,
                 anchor="w",
                 justify="left",
+                command=self._update_req_key,
             )
             rb.grid(row=i, column=0, sticky="w", pady=2)
             self.option_buttons[letter] = rb
@@ -270,26 +299,28 @@ class BlindDrawApp(tk.Tk):
         ttk.Label(feedback_frame, text="命中程度（1-5）：").grid(
             row=0, column=0, sticky=tk.W, padx=5, pady=3
         )
-        hit_combo = ttk.Combobox(
-            feedback_frame,
-            textvariable=self.var_hit_score,
-            values=["1", "2", "3", "4", "5"],
-            width=5,
-            state="readonly",
-        )
-        hit_combo.grid(row=0, column=1, sticky=tk.W, padx=5, pady=3)
+        hit_frame = ttk.Frame(feedback_frame)
+        hit_frame.grid(row=0, column=1, sticky=tk.W, padx=5, pady=3)
+        for i in range(1, 6):
+            ttk.Radiobutton(
+                hit_frame,
+                text=str(i),
+                value=str(i),
+                variable=self.var_hit_score,
+            ).pack(side=tk.LEFT, padx=2)
 
         ttk.Label(feedback_frame, text="解析质量（1-5）：").grid(
             row=0, column=2, sticky=tk.W, padx=5, pady=3
         )
-        analysis_combo = ttk.Combobox(
-            feedback_frame,
-            textvariable=self.var_analysis_quality,
-            values=["1", "2", "3", "4", "5"],
-            width=5,
-            state="readonly",
-        )
-        analysis_combo.grid(row=0, column=3, sticky=tk.W, padx=5, pady=3)
+        analysis_frame = ttk.Frame(feedback_frame)
+        analysis_frame.grid(row=0, column=3, sticky=tk.W, padx=5, pady=3)
+        for i in range(1, 6):
+            ttk.Radiobutton(
+                analysis_frame,
+                text=str(i),
+                value=str(i),
+                variable=self.var_analysis_quality,
+            ).pack(side=tk.LEFT, padx=2)
 
         ttk.Label(feedback_frame, text="盲抽适配：").grid(
             row=1, column=0, sticky=tk.W, padx=5, pady=3
@@ -338,30 +369,68 @@ class BlindDrawApp(tk.Tk):
         self.subscene_display_to_internal = {
             disp: internal for disp, internal in zip(display_names, subscene_names)
         }
-        self.subscene_combo["values"] = display_names
-        if display_names:
-            self.var_subscene.set(display_names[0])
-            self._on_subscene_changed()
+        # 清空并重建子场景按钮
+        for child in self.subscene_frame.winfo_children():
+            child.destroy()
+        self.subscene_buttons.clear()
+
+        if not display_names:
+            ttk.Label(self.subscene_frame, text="请先在左侧选择大场景。").grid(
+                row=0, column=0, sticky="w"
+            )
+            self.var_subscene.set("")
+            self._update_req_key()
+            return
+
+        ttk.Label(self.subscene_frame, text="请选择子场景：").grid(
+            row=0, column=0, sticky="w", pady=2
+        )
+        for i, (disp, internal) in enumerate(
+            zip(display_names, subscene_names), start=1
+        ):
+            rb = tk.Radiobutton(
+                self.subscene_frame,
+                text=disp,
+                variable=self.var_subscene,
+                value=disp,
+                anchor="w",
+                justify="left",
+                command=self._on_subscene_changed,
+            )
+            rb.grid(row=i, column=0, sticky="w", pady=2)
+            self.subscene_buttons[disp] = rb
+
+        # 重置下游选择
+        self.var_subscene.set("")
+        self.var_option.set("")
+        self._update_req_key()
 
     def _on_subscene_changed(self) -> None:
         scene = self.var_scene.get()
         display_name = self.var_subscene.get()
         internal_name = self.subscene_display_to_internal.get(display_name)
-        if not internal_name:
+        if not scene or not internal_name:
+            # 清空 A/B/C 文案
+            for letter in ["A", "B", "C"]:
+                self.option_buttons[letter].configure(text=letter)
+            self.var_option.set("")
+            self._update_req_key()
             return
+
         options = self.scenes.get(scene, {}).get(internal_name, {})
         for letter in ["A", "B", "C"]:
             phrase = options.get(letter, "").strip()
             text = f"{letter}：{phrase}" if phrase else letter
             self.option_buttons[letter].configure(text=text)
-        if not self.var_option.get():
-            self.var_option.set("A")
+
+        # 清空之前的 A/B/C 选择，由用户重新点选
+        self.var_option.set("")
         self._update_req_key()
 
     def _update_req_key(self) -> None:
         scene = self.var_scene.get()
         display_name = self.var_subscene.get()
-        internal_name = self.subscene_display_to_internal.get(display_name)
+        internal_name = self.subscene_display_to_internal.get(display_name) if display_name else None
         letter = self.var_option.get()
         if scene and internal_name and letter:
             req_key = f"{internal_name}_Option_{letter}"
@@ -393,6 +462,10 @@ class BlindDrawApp(tk.Tk):
             messagebox.showwarning("提示", "请先抽一签，再记录反馈。")
             return
 
+        confirm = messagebox.askyesno("确认提交", "确定要提交这条反馈吗？")
+        if not confirm:
+            return
+
         req_key = self.var_req_key.get()
         source = self.last_result_item.get("source")
         index = self.last_result_item.get("index")
@@ -405,7 +478,9 @@ class BlindDrawApp(tk.Tk):
         blind_safe_suggestion = self.var_blind_safe_suggestion.get()
         comment = self.text_comment.get("1.0", tk.END).strip()
 
+        feedback_id = get_next_feedback_id()
         record = {
+            "feedback_id": feedback_id,
             "source": source,
             "index": index,
             "req_key": req_key,
