@@ -28,10 +28,21 @@ FIELDS = [
     ("ui_mapping", "心智诊断解析 ui_mapping"),
     ("ui_action", "行动指令 ui_action"),
     ("ai_instruction", "AI 判定指令 ai_instruction"),
+    ("source", "出处 source"),
+    ("index", "编号 index"),
 ]
 
 # 短字段用单行，其余用多行
-SHORT_FIELDS = {"tag", "scene_category", "dimension_v", "dimension_e", "sutra_title", "blind_safe"}
+SHORT_FIELDS = {
+    "tag",
+    "scene_category",
+    "dimension_v",
+    "dimension_e",
+    "sutra_title",
+    "blind_safe",
+    "source",
+    "index",
+}
 
 
 def load_json():
@@ -222,6 +233,13 @@ class EditorApp:
                 entry[key] = w.get().strip()
             else:
                 entry[key] = w.get("1.0", tk.END).strip()
+        # index 字段尽量保持为整数，便于下游使用
+        if "index" in entry:
+            val = entry["index"]
+            if isinstance(val, str):
+                s = val.strip()
+                if s.isdigit():
+                    entry["index"] = int(s)
         return entry
 
     def _apply_json_tab(self):
