@@ -37,7 +37,8 @@ from tkinter import ttk, messagebox
 ROOT_DIR = Path(__file__).resolve().parent.parent
 TANJING_PATH = ROOT_DIR / "tanjing.json"
 SYSTEM_PROMPT_PATH = ROOT_DIR / "系统提示词.md"
-FEEDBACK_LOG_PATH = ROOT_DIR / "mapping" / "feedback_log.jsonl"
+# 新版反馈文件：包含 angle 字段与双重轮盘跑批结果，旧版 feedback_log.jsonl 保留作历史兼容
+FEEDBACK_LOG_PATH = ROOT_DIR / "mapping" / "feedback_log_v2.jsonl"
 
 
 def load_system_prompts(path: Path) -> Dict[str, Dict[str, Dict[str, str]]]:
@@ -244,6 +245,23 @@ def format_result(item: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# 界面配色与字体（温暖、有层次、像工具）
+BG_ROOT = "#f5f4f0"           # 暖白底
+BG_CARD = "#fefefe"           # 卡片白
+BG_BOTTOM_BAR = "#eae8e4"    # 底栏暖灰
+BG_SELECT = "#f0efe8"         # 选择区略深
+ACCENT = "#5b8a72"            # 主色：柔和青绿
+ACCENT_HOVER = "#4a7a62"
+ACCENT_FG = "#ffffff"
+FG_TEXT = "#2c2c2c"
+FG_LABEL = "#5a5a5a"
+FG_HEADING = "#3d5a4a"       # 标题偏青绿
+BORDER = "#d8d5ce"
+FONT_FAMILY = ("Helvetica Neue", "PingFang SC", "Microsoft YaHei", "sans-serif")
+FONT_SIZE = 11
+FONT_SIZE_HEADING = 12
+
+
 class BlindDrawApp(tk.Tk):
     def __init__(
         self,
@@ -251,8 +269,10 @@ class BlindDrawApp(tk.Tk):
         items: List[Dict[str, Any]],
     ) -> None:
         super().__init__()
-        self.title("盲抽模拟器（标签权重版）")
-        self.geometry("900x700")
+        self.title("盲抽模拟器 · 标签权重版")
+        self.geometry("920x680")
+        self.minsize(820, 560)
+        self.configure(bg=BG_ROOT)
 
         self.scenes = scenes
         self.items = items
@@ -267,17 +287,39 @@ class BlindDrawApp(tk.Tk):
         # 反馈相关变量
         self.var_hit_score = tk.StringVar(value="3")
         self.var_analysis_quality = tk.StringVar(value="3")
-        self.var_blind_safe_suggestion = tk.StringVar(value="keep")
+        self.var_blind_safe_suggestion = tk.StringVar(value="true")
 
         # 最近一次抽中的签文
         self.last_result_item: Dict[str, Any] | None = None
 
         self.subscene_display_to_internal: Dict[str, str] = {}
 
+        self._setup_styles()
         self._build_widgets()
 
+    def _setup_styles(self) -> None:
+        """统一字体、配色与间距，温暖有层次。"""
+        style = ttk.Style()
+        style.theme_use("clam")
+        font_ui = (FONT_FAMILY[0], FONT_SIZE) if isinstance(FONT_FAMILY[0], str) else ("TkDefaultFont", FONT_SIZE)
+        font_heading = (FONT_FAMILY[0], FONT_SIZE_HEADING) if isinstance(FONT_FAMILY[0], str) else ("TkDefaultFont", FONT_SIZE_HEADING)
+        style.configure(".", font=font_ui, background=BG_ROOT)
+        style.configure("TFrame", background=BG_ROOT)
+        style.configure("TLabelframe", font=font_heading, background=BG_CARD, bordercolor=BORDER)
+        style.configure("TLabelframe.Label", font=font_heading, foreground=FG_HEADING, background=BG_CARD)
+        style.configure("TLabel", foreground=FG_TEXT, background=BG_ROOT)
+        style.configure("TButton", font=font_ui, padding=(12, 6), background=BG_SELECT, foreground=FG_TEXT)
+        style.map("TButton", background=[("active", BORDER), ("pressed", BORDER)])
+        style.configure("Accent.TButton", font=font_heading, padding=(20, 10),
+                       background=ACCENT, foreground=ACCENT_FG)
+        style.map("Accent.TButton", background=[("active", ACCENT_HOVER), ("pressed", ACCENT_HOVER)])
+        style.configure("BottomBar.TFrame", background=BG_BOTTOM_BAR)
+        style.configure("BottomBar.TLabel", background=BG_BOTTOM_BAR, foreground=FG_LABEL)
+        style.configure("TRadiobutton", background=BG_CARD, foreground=FG_TEXT)
+        style.configure("Feedback.TFrame", background=BG_CARD)
+
     def _build_widgets(self) -> None:
-        top_frame = ttk.Frame(self, padding=10)
+        top_frame = ttk.Frame(self, padding=(12, 12))
         top_frame.pack(side=tk.TOP, fill=tk.X)
 
         # 第一步：大场景选择
@@ -294,6 +336,8 @@ class BlindDrawApp(tk.Tk):
                 anchor="w",
                 justify="left",
                 command=self._on_scene_changed,
+                bg=BG_CARD, fg=FG_TEXT, selectcolor=BG_SELECT,
+                activebackground=BG_CARD, activeforeground=FG_TEXT,
             )
             rb.grid(row=i, column=0, sticky="w", pady=2)
             self.scene_buttons[scene] = rb
@@ -317,95 +361,98 @@ class BlindDrawApp(tk.Tk):
                 anchor="w",
                 justify="left",
                 command=self._update_req_key,
+                bg=BG_CARD, fg=FG_TEXT, selectcolor=BG_SELECT,
+                activebackground=BG_CARD, activeforeground=FG_TEXT,
             )
             rb.grid(row=i, column=0, sticky="w", pady=2)
             self.option_buttons[letter] = rb
 
-        action_frame = ttk.Frame(self, padding=10)
+        action_frame = ttk.Frame(self, padding=(12, 8))
         action_frame.pack(side=tk.TOP, fill=tk.X)
 
         self.req_key_label = ttk.Label(action_frame, text="当前路由键：")
         self.req_key_label.pack(side=tk.LEFT, padx=5)
 
-        draw_button = ttk.Button(action_frame, text="抽一签", command=self.on_draw_clicked)
-        draw_button.pack(side=tk.RIGHT, padx=5)
+        draw_btn = ttk.Button(action_frame, text="抽一签", command=self.on_draw_clicked, style="Accent.TButton")
+        draw_btn.pack(side=tk.RIGHT, padx=5)
 
-        result_frame = ttk.Frame(self, padding=10)
-        result_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        result_frame = ttk.LabelFrame(self, text="抽签结果", padding=(10, 8))
+        result_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=12, pady=(0, 8))
 
-        ttk.Label(result_frame, text="抽签结果：").pack(anchor="w")
-        self.text_result = tk.Text(result_frame, wrap="word", height=18)
-        self.text_result.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.text_result = tk.Text(
+            result_frame, wrap="word", height=10,
+            font=(FONT_FAMILY[0], FONT_SIZE), bg=BG_CARD, fg=FG_TEXT,
+            insertbackground=FG_TEXT, relief=tk.FLAT,
+            highlightbackground=BORDER, highlightthickness=1, padx=8, pady=8,
+        )
+        self.text_result.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        scrollbar = ttk.Scrollbar(result_frame, command=self.text_result.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.text_result.configure(yscrollcommand=scrollbar.set)
+        result_sb = ttk.Scrollbar(result_frame, command=self.text_result.yview)
+        result_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text_result.configure(yscrollcommand=result_sb.set)
 
-        # 反馈区域
-        feedback_frame = ttk.LabelFrame(self, text="反馈（用于后续学习，不影响当前抽签逻辑）", padding=10)
-        feedback_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        # 反馈区域（紧凑，不占满屏）
+        feedback_frame = ttk.LabelFrame(
+            self, text="反馈（用于后续学习，不影响当前抽签）", padding=(10, 8)
+        )
+        feedback_frame.pack(side=tk.TOP, fill=tk.X, padx=12, pady=(0, 6))
 
         ttk.Label(feedback_frame, text="命中程度（1-5）：").grid(
-            row=0, column=0, sticky=tk.W, padx=5, pady=3
+            row=0, column=0, sticky=tk.W, padx=6, pady=4
         )
-        hit_frame = ttk.Frame(feedback_frame)
-        hit_frame.grid(row=0, column=1, sticky=tk.W, padx=5, pady=3)
+        hit_frame = ttk.Frame(feedback_frame, style="Feedback.TFrame")
+        hit_frame.grid(row=0, column=1, sticky=tk.W, padx=6, pady=4)
         for i in range(1, 6):
             ttk.Radiobutton(
-                hit_frame,
-                text=str(i),
-                value=str(i),
-                variable=self.var_hit_score,
+                hit_frame, text=str(i), value=str(i), variable=self.var_hit_score,
             ).pack(side=tk.LEFT, padx=2)
 
         ttk.Label(feedback_frame, text="解析质量（1-5）：").grid(
-            row=0, column=2, sticky=tk.W, padx=5, pady=3
+            row=0, column=2, sticky=tk.W, padx=6, pady=4
         )
-        analysis_frame = ttk.Frame(feedback_frame)
-        analysis_frame.grid(row=0, column=3, sticky=tk.W, padx=5, pady=3)
+        analysis_frame = ttk.Frame(feedback_frame, style="Feedback.TFrame")
+        analysis_frame.grid(row=0, column=3, sticky=tk.W, padx=6, pady=4)
         for i in range(1, 6):
             ttk.Radiobutton(
-                analysis_frame,
-                text=str(i),
-                value=str(i),
-                variable=self.var_analysis_quality,
+                analysis_frame, text=str(i), value=str(i), variable=self.var_analysis_quality,
             ).pack(side=tk.LEFT, padx=2)
 
         ttk.Label(feedback_frame, text="盲抽适配：").grid(
-            row=1, column=0, sticky=tk.W, padx=5, pady=3
+            row=1, column=0, sticky=tk.W, padx=6, pady=4
         )
         ttk.Radiobutton(
-            feedback_frame,
-            text="保持现状",
-            variable=self.var_blind_safe_suggestion,
-            value="keep",
-        ).grid(row=1, column=1, sticky=tk.W, padx=5, pady=3)
+            feedback_frame, text="适合盲抽",
+            variable=self.var_blind_safe_suggestion, value="true",
+        ).grid(row=1, column=1, sticky=tk.W, padx=6, pady=4)
         ttk.Radiobutton(
-            feedback_frame,
-            text="应该可盲抽",
-            variable=self.var_blind_safe_suggestion,
-            value="should_be_blind_safe",
-        ).grid(row=1, column=2, sticky=tk.W, padx=5, pady=3)
-        ttk.Radiobutton(
-            feedback_frame,
-            text="不宜盲抽",
-            variable=self.var_blind_safe_suggestion,
-            value="should_not_be_blind_safe",
-        ).grid(row=1, column=3, sticky=tk.W, padx=5, pady=3)
+            feedback_frame, text="不宜盲抽",
+            variable=self.var_blind_safe_suggestion, value="false",
+        ).grid(row=1, column=2, sticky=tk.W, padx=6, pady=4)
 
         ttk.Label(feedback_frame, text="备注：").grid(
-            row=2, column=0, sticky=tk.NW, padx=5, pady=3
+            row=2, column=0, sticky=tk.NW, padx=6, pady=4
         )
-        self.text_comment = tk.Text(feedback_frame, wrap="word", height=4)
-        self.text_comment.grid(
-            row=2, column=1, columnspan=3, sticky=tk.EW, padx=5, pady=3
+        self.text_comment = tk.Text(
+            feedback_frame, wrap="word", height=2,
+            font=(FONT_FAMILY[0], FONT_SIZE), bg=BG_CARD, fg=FG_TEXT,
+            insertbackground=FG_TEXT, relief=tk.FLAT,
+            highlightbackground=BORDER, highlightthickness=1, padx=6, pady=4,
         )
+        self.text_comment.grid(row=2, column=1, columnspan=3, sticky=tk.EW, padx=6, pady=4)
         feedback_frame.columnconfigure(1, weight=1)
         feedback_frame.columnconfigure(2, weight=1)
         feedback_frame.columnconfigure(3, weight=1)
 
-        save_button = ttk.Button(feedback_frame, text="保存反馈", command=self.on_save_feedback)
-        save_button.grid(row=3, column=3, sticky=tk.E, padx=5, pady=5)
+        # 底部操作栏：始终可见，未最大化时也能看到「确认提交」
+        bottom_bar = ttk.Frame(self, style="BottomBar.TFrame", padding=(12, 10))
+        bottom_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        ttk.Label(bottom_bar, text="填写反馈后点击「确认提交」，将写入 feedback_log.jsonl", style="BottomBar.TLabel").pack(
+            side=tk.LEFT, padx=(0, 12)
+        )
+        self._btn_confirm = ttk.Button(
+            bottom_bar, text="确认提交", command=self.on_save_feedback, style="Accent.TButton"
+        )
+        self._btn_confirm.pack(side=tk.RIGHT, padx=5)
 
     def _on_scene_changed(self) -> None:
         scene = self.var_scene.get()
@@ -445,6 +492,8 @@ class BlindDrawApp(tk.Tk):
                 anchor="w",
                 justify="left",
                 command=self._on_subscene_changed,
+                bg=BG_CARD, fg=FG_TEXT, selectcolor=BG_SELECT,
+                activebackground=BG_CARD, activeforeground=FG_TEXT,
             )
             rb.grid(row=i, column=0, sticky="w", pady=2)
             self.subscene_buttons[disp] = rb
@@ -525,7 +574,8 @@ class BlindDrawApp(tk.Tk):
         except ValueError:
             messagebox.showwarning("提示", "命中程度和解析质量必须是数字。")
             return
-        blind_safe_suggestion = self.var_blind_safe_suggestion.get()
+        blind_safe_raw = self.var_blind_safe_suggestion.get()
+        blind_safe_suggestion = str(blind_safe_raw).strip().lower() == "true"
         comment = self.text_comment.get("1.0", tk.END).strip()
 
         feedback_id = get_next_feedback_id()
