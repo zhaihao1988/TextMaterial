@@ -8,7 +8,9 @@
 - 三层选择：大场景 -> 子场景 -> 36 维短句（Option A/B/C）。
 - 根据选择构造路由键 req_key，如 "樊笼-疲于奔命_Option_B"。
 - 从 tanjing.json 中筛选 blind_safe == true 且 match_weights[req_key] > 0 的签文。
-- 在候选集合上按权重做轮盘赌，每次只返回 1 条签文，并打印关键字段。
+- 采用「双重轮盘 + 分层卡池」算法：
+  - 第 1 重：在 SSR/SR/R/N 四个分数档位之间按预设权重 (75/15/8/2) 抽取「池子」；
+  - 第 2 重：在选定池子中对候选签文做等概率随机，返回 1 条签文。
 
 依赖：
 - 标准库：json, os, pathlib, random, re, sys
@@ -194,9 +196,19 @@ def blind_draw_once(
     """
     依据盲抽规则，在给定 req_key 上执行一次抽取：
     - 仅使用 blind_safe == true 且 match_weights[req_key] > 0 的签文。
-    - 使用权重轮盘赌，返回 1 条；若无候选，则返回 None。
+    - 采用「双重轮盘 + 分层卡池」：
+      1）按权重 w 将候选签文分入四个档位（SSR/SR/R/N）；
+      2）在非空档位之间按预设权重 (75/15/8/2) 做第 1 重轮盘，选出档位；
+      3）在该档位内部做等概率随机，选出最终签文。
+    - 若无任何候选，则返回 None。
     """
-    candidates: List[Tuple[Dict[str, Any], float]] = []
+    # 1. 收集候选并按分数分桶
+    buckets = {
+        "SSR": [],  # w >= 100
+        "SR": [],   # 80 <= w < 100
+        "R": [],    # 60 <= w < 80
+        "N": [],    # 0 < w < 60
+    }
 
     for item in items:
         if not item.get("blind_safe", False):
@@ -211,12 +223,52 @@ def blind_draw_once(
             continue
         if weight_value <= 0:
             continue
-        candidates.append((item, weight_value))
+        if weight_value >= 100:
+            buckets["SSR"].append(item)
+        elif weight_value >= 80:
+            buckets["SR"].append(item)
+        elif weight_value >= 60:
+            buckets["R"].append(item)
+        else:
+            buckets["N"].append(item)
 
-    if not candidates:
+    # 若四个桶全为空，则本次无可用签文
+    if not any(buckets.values()):
         return None
 
-    return weighted_random_choice(candidates)
+    # 2. 构造非空档位的「池子轮盘」
+    tier_base_weights = {
+        "SSR": 75.0,
+        "SR": 15.0,
+        "R": 8.0,
+        "N": 2.0,
+    }
+    tier_candidates: List[Tuple[str, float]] = []
+    for tier_name, items_in_tier in buckets.items():
+        if not items_in_tier:
+            continue
+        tier_weight = tier_base_weights.get(tier_name, 0.0)
+        if tier_weight > 0:
+            tier_candidates.append((tier_name, tier_weight))
+
+    # 理论上只要有候选，就至少有一个非空档位
+    if not tier_candidates:
+        return None
+
+    # 第 1 重轮盘：在档位之间按预设权重抽取池子
+    chosen_tier = weighted_random_choice(tier_candidates)
+
+    # 第 2 重轮盘：在选定池子中做等概率随机
+    bucket_items = buckets.get(chosen_tier, [])
+    if not bucket_items:
+        # 极端情况下兜底：退化为在所有候选上等概率随机
+        all_items: List[Dict[str, Any]] = []
+        for v in buckets.values():
+            all_items.extend(v)
+        if not all_items:
+            return None
+        return random.choice(all_items)
+    return random.choice(bucket_items)
 
 
 def print_result(item: Dict[str, Any]) -> None:
@@ -229,9 +281,11 @@ def print_result(item: Dict[str, Any]) -> None:
     ui_mapping = item.get("ui_mapping", "")
     ui_action = item.get("ui_action", "")
     index = item.get("index", "")
+    angle = item.get("angle", "")
 
     print("\n=== 抽签结果 ===")
-    print(f"index：{index}")
+    print(f"source：{item.get('source', '')}")
+    print(f"index：{index}  angle：{angle}")
     print(f"标题：{title}")
     print(f"内容：\n{text}")
     print(f"\n翻译：\n{translation}")

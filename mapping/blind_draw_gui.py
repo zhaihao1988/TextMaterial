@@ -8,7 +8,9 @@
 - 三层选择（大场景 -> 子场景 -> 36 维短句 A/B/C），数据源来自《系统提示词.md》。
 - 根据选择构造路由键 req_key，例如 "樊笼-疲于奔命_Option_B"。
 - 从 tanjing.json 中筛选 blind_safe == true 且 match_weights[req_key] > 0 的签文。
-- 在候选集合上按权重做轮盘赌，每次只返回 1 条签文，并在界面中展示关键字段。
+- 采用「双重轮盘 + 分层卡池」算法：
+  - 第 1 重：在 SSR/SR/R/N 四个分数档位之间按预设权重 (75/15/8/2) 抽取「池子」；
+  - 第 2 重：在选定池子中对候选签文做等概率随机，每次只返回 1 条签文，并在界面中展示关键字段。
 
 依赖：
 - 标准库：json, os, pathlib, random, re
@@ -126,7 +128,13 @@ def weighted_random_choice(
 def blind_draw_once(
     items: List[Dict[str, Any]], req_key: str
 ) -> Dict[str, Any] | None:
-    candidates: List[Tuple[Dict[str, Any], float]] = []
+    # 1. 收集候选并按分数分桶
+    buckets: Dict[str, List[Dict[str, Any]]] = {
+        "SSR": [],  # w >= 100
+        "SR": [],   # 80 <= w < 100
+        "R": [],    # 60 <= w < 80
+        "N": [],    # 0 < w < 60
+    }
 
     for item in items:
         if not item.get("blind_safe", False):
@@ -141,12 +149,50 @@ def blind_draw_once(
             continue
         if weight_value <= 0:
             continue
-        candidates.append((item, weight_value))
+        if weight_value >= 100:
+            buckets["SSR"].append(item)
+        elif weight_value >= 80:
+            buckets["SR"].append(item)
+        elif weight_value >= 60:
+            buckets["R"].append(item)
+        else:
+            buckets["N"].append(item)
 
-    if not candidates:
+    # 若四个桶全为空，则本次无可用签文
+    if not any(buckets.values()):
         return None
 
-    return weighted_random_choice(candidates)
+    # 2. 构造非空档位的「池子轮盘」
+    tier_base_weights: Dict[str, float] = {
+        "SSR": 75.0,
+        "SR": 15.0,
+        "R": 8.0,
+        "N": 2.0,
+    }
+    tier_candidates: List[Tuple[str, float]] = []
+    for tier_name, items_in_tier in buckets.items():
+        if not items_in_tier:
+            continue
+        tier_weight = tier_base_weights.get(tier_name, 0.0)
+        if tier_weight > 0:
+            tier_candidates.append((tier_name, tier_weight))
+
+    if not tier_candidates:
+        return None
+
+    # 第 1 重轮盘：在档位之间按预设权重抽取池子
+    chosen_tier = weighted_random_choice(tier_candidates)
+
+    # 第 2 重轮盘：在选定池子中做等概率随机
+    bucket_items = buckets.get(chosen_tier, [])
+    if not bucket_items:
+        all_items: List[Dict[str, Any]] = []
+        for v in buckets.values():
+            all_items.extend(v)
+        if not all_items:
+            return None
+        return random.choice(all_items)
+    return random.choice(bucket_items)
 
 
 def get_next_feedback_id() -> int:
@@ -175,9 +221,12 @@ def format_result(item: Dict[str, Any]) -> str:
     ui_mapping = item.get("ui_mapping", "")
     ui_action = item.get("ui_action", "")
     index = item.get("index", "")
+    angle = item.get("angle", "")
+    source = item.get("source", "")
 
     lines = [
-        f"index：{index}",
+        f"source：{source}",
+        f"index：{index}  angle：{angle}",
         f"标题：{title}",
         "",
         "内容：",
@@ -469,6 +518,7 @@ class BlindDrawApp(tk.Tk):
         req_key = self.var_req_key.get()
         source = self.last_result_item.get("source")
         index = self.last_result_item.get("index")
+        angle = self.last_result_item.get("angle")
         try:
             hit_score = int(self.var_hit_score.get())
             analysis_quality = int(self.var_analysis_quality.get())
@@ -483,6 +533,7 @@ class BlindDrawApp(tk.Tk):
             "feedback_id": feedback_id,
             "source": source,
             "index": index,
+            "angle": angle,
             "req_key": req_key,
             "timestamp": datetime.now().isoformat(timespec="seconds"),
             "hit_score": hit_score,

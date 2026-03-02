@@ -30,6 +30,7 @@ FIELDS = [
     ("ai_instruction", "AI 判定指令 ai_instruction"),
     ("source", "出处 source"),
     ("index", "编号 index"),
+    ("angle", "视角编号 angle"),
 ]
 
 # 短字段用单行，其余用多行
@@ -42,6 +43,7 @@ SHORT_FIELDS = {
     "blind_safe",
     "source",
     "index",
+    "angle",
 }
 
 
@@ -98,6 +100,7 @@ class EditorApp:
 
         ttk.Button(top, text="保存到 tanjing.json", command=self._save).pack(side=tk.LEFT, padx=2)
         ttk.Button(top, text="删除当前条目", command=self._delete_current_entry).pack(side=tk.LEFT, padx=2)
+        ttk.Button(top, text="新增条目", command=self._add_entry).pack(side=tk.LEFT, padx=2)
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=2)
 
         # 选项卡：逐条编辑 | 整签 JSON
@@ -398,6 +401,23 @@ class EditorApp:
         except Exception as e:
             messagebox.showerror("删除失败", str(e))
             self.status.config(text=str(e), foreground="red")
+
+    def _add_entry(self):
+        """在数据末尾新增一条空记录并跳转过去编辑。"""
+        # 先同步当前选项卡内容到 data
+        if self.data:
+            self._sync_current_tab_to_data()
+        else:
+            self.data = []
+
+        # 新增一条空对象，由用户自行填写各字段（包括 index / angle 等）
+        self.data.append({})
+        self.current_index = len(self.data) - 1
+        self._refresh_index()
+        self._show_entry()
+        self._refresh_json_tab()
+        self.status.config(text="已新增一条空记录，请填写后保存", foreground="green")
+        self.root.after(2000, lambda: self.status.config(text=""))
 
     def _on_close(self):
         self.root.quit()
