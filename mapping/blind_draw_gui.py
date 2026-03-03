@@ -35,7 +35,7 @@ from tkinter import ttk, messagebox
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-TANJING_PATH = ROOT_DIR / "tanjing.json"
+TEXT_MATERIAL_PATH = ROOT_DIR / "text" / "textMaterial.json"
 SYSTEM_PROMPT_PATH = ROOT_DIR / "系统提示词.md"
 # 新版反馈文件：包含 angle 字段与双重轮盘跑批结果，旧版 feedback_log.jsonl 保留作历史兼容
 FEEDBACK_LOG_PATH = ROOT_DIR / "mapping" / "feedback_log_v2.jsonl"
@@ -98,7 +98,7 @@ def load_system_prompts(path: Path) -> Dict[str, Dict[str, Dict[str, str]]]:
     return scenes
 
 
-def load_tanjing_items(path: Path) -> List[Dict[str, Any]]:
+def load_text_material_items(path: Path) -> List[Dict[str, Any]]:
     if not path.is_file():
         raise FileNotFoundError(f"未找到数据文件：{path}")
 
@@ -106,7 +106,7 @@ def load_tanjing_items(path: Path) -> List[Dict[str, Any]]:
         data = json.load(f)
 
     if not isinstance(data, list):
-        raise ValueError("tanjing.json 顶层结构应为列表。")
+        raise ValueError("textMaterial.json 顶层结构应为列表。")
 
     return data
 
@@ -216,8 +216,8 @@ def get_next_feedback_id() -> int:
 
 
 def format_result(item: Dict[str, Any]) -> str:
-    title = item.get("sutra_title", "")
-    text = item.get("sutra_text", "")
+    title = item.get("title", "")
+    text = item.get("text", "")
     translation = item.get("ui_translation", "")
     ui_mapping = item.get("ui_mapping", "")
     ui_action = item.get("ui_action", "")
@@ -613,9 +613,9 @@ def main() -> None:
         return
 
     try:
-        items = load_tanjing_items(TANJING_PATH)
+        items = load_text_material_items(TEXT_MATERIAL_PATH)
     except Exception as e:
-        messagebox.showerror("错误", f"加载 tanjing.json 失败：{e}")
+        messagebox.showerror("错误", f"加载 textMaterial.json 失败：{e}")
         return
 
     app = BlindDrawApp(scenes, items)

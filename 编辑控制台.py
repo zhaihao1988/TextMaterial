@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-六祖坛经 JSON 编辑控制台
-直接读写同目录下的 tanjing.json，可随意修改并保存到原文件（文件名不变）。
+六祖坛经 / TextMaterial JSON 编辑控制台
+直接读写 text/textMaterial.json，可随意修改并保存到原文件（文件名不变）。
 """
 import json
 import os
@@ -9,9 +9,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter.scrolledtext import ScrolledText
 
-# 与 tanjing.json 同目录
+# 工程根目录下的 text/textMaterial.json（以当前脚本所在目录为根）
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-TANJING_PATH = os.path.join(SCRIPT_DIR, "tanjing.json")
+TEXT_MATERIAL_PATH = os.path.join(SCRIPT_DIR, "text", "textMaterial.json")
 
 # 条目字段（与 JSON 一致）
 FIELDS = [
@@ -20,8 +20,8 @@ FIELDS = [
     ("emotion_state", "情绪状态 emotion_state"),
     ("dimension_v", "维度V dimension_v"),
     ("dimension_e", "维度E dimension_e"),
-    ("sutra_title", "经文标题 sutra_title"),
-    ("sutra_text", "原文 sutra_text"),
+    ("title", "经文标题 title"),
+    ("text", "原文 text"),
     ("ui_translation", "白话直译 ui_translation"),
     ("blind_safe", "盲抽安全 blind_safe"),
     ("match_weights", "权重字典 match_weights"),
@@ -39,7 +39,7 @@ SHORT_FIELDS = {
     "scene_category",
     "dimension_v",
     "dimension_e",
-    "sutra_title",
+    "title",
     "blind_safe",
     "source",
     "index",
@@ -48,7 +48,7 @@ SHORT_FIELDS = {
 
 
 def load_json():
-    path = TANJING_PATH
+    path = TEXT_MATERIAL_PATH
     if not os.path.exists(path):
         raise FileNotFoundError(f"未找到文件：{path}")
     with open(path, "r", encoding="utf-8") as f:
@@ -56,14 +56,14 @@ def load_json():
 
 
 def save_json(data):
-    with open(TANJING_PATH, "w", encoding="utf-8") as f:
+    with open(TEXT_MATERIAL_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 class EditorApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("六祖坛经 JSON 编辑控制台 — tanjing.json")
+        self.root.title("六祖坛经 JSON 编辑控制台 — textMaterial.json")
         self.root.minsize(800, 600)
         self.root.geometry("1000x700")
 
@@ -92,13 +92,13 @@ class EditorApp:
         ttk.Label(top, text="条").pack(side=tk.LEFT, padx=(2, 2))
         ttk.Button(top, text="跳转", command=self._goto_index).pack(side=tk.LEFT, padx=(2, 8))
 
-        # 按 sutra_title 精准查找
-        ttk.Label(top, text="sutra_title：").pack(side=tk.LEFT, padx=(4, 2))
+        # 按 title 精准查找
+        ttk.Label(top, text="title：").pack(side=tk.LEFT, padx=(4, 2))
         self.search_entry = ttk.Entry(top, width=20)
         self.search_entry.pack(side=tk.LEFT)
         ttk.Button(top, text="查找", command=self._search_by_sutra_title).pack(side=tk.LEFT, padx=(2, 8))
 
-        ttk.Button(top, text="保存到 tanjing.json", command=self._save).pack(side=tk.LEFT, padx=2)
+        ttk.Button(top, text="保存到 textMaterial.json", command=self._save).pack(side=tk.LEFT, padx=2)
         ttk.Button(top, text="删除当前条目", command=self._delete_current_entry).pack(side=tk.LEFT, padx=2)
         ttk.Button(top, text="新增条目", command=self._add_entry).pack(side=tk.LEFT, padx=2)
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=2)
@@ -153,7 +153,7 @@ class EditorApp:
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=4)
         ttk.Label(
             self.root,
-            text=f"文件：{TANJING_PATH}",
+            text=f"文件：{TEXT_MATERIAL_PATH}",
             font=("Segoe UI", 9),
             foreground="gray",
         ).pack(anchor="w", padx=6, pady=2)
@@ -189,7 +189,7 @@ class EditorApp:
         try:
             self.data = load_json()
             if not isinstance(self.data, list):
-                messagebox.showerror("错误", "tanjing.json 根节点必须是数组 []")
+                messagebox.showerror("错误", "textMaterial.json 根节点必须是数组 []")
                 self.root.quit()
                 return
             self.current_index = 0
@@ -334,7 +334,7 @@ class EditorApp:
         self._refresh_json_tab()
 
     def _search_by_sutra_title(self):
-        """按 sutra_title 精准匹配查找并跳转到对应条目。"""
+        """按 title 精准匹配查找并跳转到对应条目。"""
         if not self.data:
             return
         title = self.search_entry.get().strip() if hasattr(self, "search_entry") else ""
@@ -344,11 +344,11 @@ class EditorApp:
         self._save()
         found_index = None
         for i, item in enumerate(self.data):
-            if item.get("sutra_title", "") == title:
+            if item.get("title", "") == title:
                 found_index = i
                 break
         if found_index is None:
-            messagebox.showinfo("未找到", f"未找到 sutra_title 为：{title} 的条目")
+            messagebox.showinfo("未找到", f"未找到 title 为：{title} 的条目")
             return
         self.current_index = found_index
         self._refresh_index()
@@ -360,13 +360,13 @@ class EditorApp:
         if not self.data:
             return
         entry = self._get_entry() or {}
-        title = entry.get("sutra_title", "")
+        title = entry.get("title", "")
         n = len(self.data)
         idx = self.current_index
-        hint = f"（sutra_title：{title}）" if title else ""
+        hint = f"（title：{title}）" if title else ""
         ok = messagebox.askyesno(
             "确认删除",
-            f"确定要删除第 {idx + 1} / {n} 条{hint}吗？\n\n此操作会立即写回 tanjing.json，且不可撤销。",
+            f"确定要删除第 {idx + 1} / {n} 条{hint}吗？\n\n此操作会立即写回 textMaterial.json，且不可撤销。",
         )
         if not ok:
             return

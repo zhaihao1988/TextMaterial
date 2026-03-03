@@ -31,7 +31,7 @@ from typing import Dict, List, Tuple, Any
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 MAPPING_DIR = ROOT_DIR / "mapping"
-TANJING_PATH = ROOT_DIR / "tanjing.json"
+TEXT_MATERIAL_PATH = ROOT_DIR / "text" / "textMaterial.json"
 SYSTEM_PROMPT_PATH = ROOT_DIR / "系统提示词.md"
 
 
@@ -95,7 +95,7 @@ def load_system_prompts(path: Path) -> Dict[str, Dict[str, Dict[str, str]]]:
     return scenes
 
 
-def load_tanjing_items(path: Path) -> List[Dict[str, Any]]:
+def load_text_material_items(path: Path) -> List[Dict[str, Any]]:
     if not path.is_file():
         raise FileNotFoundError(f"未找到数据文件：{path}")
 
@@ -103,7 +103,7 @@ def load_tanjing_items(path: Path) -> List[Dict[str, Any]]:
         data = json.load(f)
 
     if not isinstance(data, list):
-        raise ValueError("tanjing.json 顶层结构应为列表。")
+        raise ValueError("textMaterial.json 顶层结构应为列表。")
 
     return data
 
@@ -275,8 +275,8 @@ def print_result(item: Dict[str, Any]) -> None:
     """
     打印签文的关键字段，便于在命令行中阅读。
     """
-    title = item.get("sutra_title", "")
-    text = item.get("sutra_text", "")
+    title = item.get("title", "")
+    text = item.get("text", "")
     translation = item.get("ui_translation", "")
     ui_mapping = item.get("ui_mapping", "")
     ui_action = item.get("ui_action", "")
@@ -296,7 +296,7 @@ def print_result(item: Dict[str, Any]) -> None:
 
 def main() -> None:
     print("盲抽模拟器（仅标签权重，不含向量语义）")
-    print(f"数据文件：{TANJING_PATH}")
+    print(f"数据文件：{TEXT_MATERIAL_PATH}")
     print(f"系统提示词：{SYSTEM_PROMPT_PATH}")
 
     try:
@@ -306,9 +306,9 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        items = load_tanjing_items(TANJING_PATH)
+        items = load_text_material_items(TEXT_MATERIAL_PATH)
     except Exception as e:
-        print(f"加载 tanjing.json 失败：{e}", file=sys.stderr)
+        print(f"加载 textMaterial.json 失败：{e}", file=sys.stderr)
         sys.exit(1)
 
     while True:
