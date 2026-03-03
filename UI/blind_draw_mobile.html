@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>六祖 · 盲抽原型</title>
+  <style>
+    :root {
+      --bg-root: #f7f3e8;
+      --bg-paper: #f9f6ee;
+      --ink-main: #3c3022;
+      --ink-soft: #7a6f63;
+      --ink-mute: #a79b8b;
+      --accent-soft: #9aa27a;
+      --accent-deep: #6c7351;
+      --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08);
+      --radius-soft: 6px;
+      --transition-slow: 0.65s ease-in-out;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #fbf7ec 0, #f0eadc 45%, #e4ddcf 100%);
+      color: var(--ink-main);
+      font-family: "Noto Serif SC", "Songti SC", "STSong", "KaiTi", "Times New Roman", serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .phone-shell {
+      width: 390px;
+      max-width: 100%;
+      height: 780px;
+      max-height: 100vh;
+      padding: 18px 10px;
+      border-radius: 40px;
+      background: radial-gradient(circle at top, #fdf9f0 0, #ede4d5 55%, #ddd3c4 100%);
+      box-shadow:
+        0 22px 60px rgba(0, 0, 0, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phone-notch {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.88);
+    }
+
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      border-radius: 30px;
+      background: radial-gradient(circle at top left, #fcf8ef 0, #f5efe2 45%, #eee5d6 100%);
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.85),
+        0 0 0 1px rgba(0, 0, 0, 0.03);
+      padding: 14px 14px 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--ink-mute);
+    }
+
+    .top-bar-left {
+      letter-spacing: 0.14em;
+    }
+
+    .top-bar-right {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .enso {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      border-top-color: transparent;
+      border-right-color: transparent;
+      transform: rotate(-35deg);
+    }
+
+    .header {
+      margin-top: 6px;
+      padding-bottom: 4px;
+    }
+
+    .app-title {
+      font-size: 17px;
+      letter-spacing: 0.22em;
+      color: var(--ink-main);
+    }
+
+    .app-subtitle {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--ink-soft);
+      letter-spacing: 0.12em;
+    }
+
+    .scroll-area {
+      flex: 1;
+      margin-top: 6px;
+      padding-right: 4px;
+      overflow-y: auto;
+    }
+
+    .fade-area {
+      transition: opacity var(--transition-slow), transform var(--transition-slow);
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .fade-area.hidden {
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+    }
+
+    .section-label {
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.2em;
+      margin-bottom: 2px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      color: var(--ink-main);
+    }
+
+    .section-block {
+      padding: 10px 2px 4px;
+    }
+
+    .hint-line {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--ink-soft);
+    }
+
+    .choice-row {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .choice-pill {
+      border: none;
+      background: transparent;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: var(--ink-soft);
+      border-radius: var(--radius-soft);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: color var(--transition-slow);
+    }
+
+    .choice-pill::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: 1px;
+      width: 0;
+      height: 1px;
+      background: linear-gradient(to right, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.55));
+      transition: width var(--transition-slow);
+    }
+
+    .choice-pill[data-selected="true"] {
+      color: var(--ink-main);
+    }
+
+    .choice-pill[data-selected="true"]::after {
+      width: 100%;
+    }
+
+    .choice-pill[data-disabled="true"] {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .choice-meta {
+      font-size: 11px;
+      color: var(--ink-mute);
+      margin-top: 2px;
+    }
+
+    .line-separator {
+      margin: 10px 0 4px;
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.18), transparent);
+    }
+
+    .abc-list {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .abc-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 2px;
+      border-radius: var(--radius-soft);
+      cursor: pointer;
+      transition: background var(--transition-slow), color var(--transition-slow);
+    }
+
+    .abc-item-label {
+      min-width: 1.5em;
+      font-size: 12px;
+      color: var(--ink-mute);
+    }
+
+    .abc-item-text {
+      font-size: 12px;
+      color: var(--ink-soft);
+      line-height: 1.5;
+    }
+
+    .abc-item[data-selected="true"] {
+      background: radial-gradient(circle at left, rgba(154, 162, 122, 0.18), transparent 65%);
+      color: var(--ink-main);
+    }
+
+    .abc-item[data-selected="true"] .abc-item-label {
+      color: var(--ink-main);
+    }
+
+    .abc-item[data-selected="true"] .abc-item-text {
+      color: var(--ink-main);
+    }
+
+    .placeholder {
+      font-size: 12px;
+      color: var(--ink-mute);
+      text-align: center;
+      padding: 10px 4px 0;
+    }
+
+    .ritual-layer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 10px 10px;
+      text-align: center;
+      transition: opacity var(--transition-slow), transform var(--transition-slow);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+    }
+
+    .ritual-layer.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .ritual-circle {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.45);
+      border-top-color: transparent;
+      background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.9), transparent 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+      cursor: pointer;
+      transition: transform 0.6s ease-out, box-shadow 0.6s ease-out, border-color 0.6s ease-out;
+    }
+
+    .ritual-circle-inner {
+      font-size: 18px;
+      letter-spacing: 0.35em;
+      color: var(--ink-main);
+    }
+
+    .ritual-circle:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.16);
+      border-color: rgba(0, 0, 0, 0.6);
+    }
+
+    .ritual-hint {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--ink-soft);
+      line-height: 1.6;
+    }
+
+    .breath-text {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.18em;
+    }
+
+    .ritual-layer.busy .ritual-circle {
+      animation: pulse 1.3s ease-in-out infinite;
+      cursor: default;
+    }
+
+    .ritual-layer.busy .ritual-circle-inner {
+      opacity: 0.4;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+      }
+      50% {
+        transform: scale(1.04);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+      }
+    }
+
+    .result-section {
+      margin-top: 8px;
+      padding: 16px 0 10px;
+      border-radius: var(--radius-soft);
+      background: radial-gradient(circle at top, #fbf8f0 0, #f4eee2 40%, #ede4d7 100%);
+      box-shadow: var(--shadow-soft);
+      transform-origin: top center;
+      transform: scale(0.98);
+      opacity: 0;
+      transition: opacity var(--transition-slow), transform var(--transition-slow);
+      pointer-events: none;
+    }
+
+    .result-section.visible {
+      opacity: 1;
+      transform: scale(1);
+      pointer-events: auto;
+    }
+
+    .result-inner {
+      max-width: 82%;
+      margin: 0 auto;
+    }
+
+    .result-header {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .result-title-main {
+      font-size: 18px;
+      letter-spacing: 0.22em;
+      color: var(--ink-main);
+      margin-bottom: 4px;
+    }
+
+    .result-angle {
+      font-size: 10px;
+      color: var(--ink-mute);
+      line-height: 1.6;
+    }
+
+    .result-body {
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .sutra-text {
+      font-size: 13px;
+      line-height: 2;
+      color: var(--ink-main);
+      white-space: pre-line;
+      max-width: 85%;
+      margin: 0 auto;
+      text-align: left;
+      position: relative;
+    }
+
+    .sutra-text::before,
+    .sutra-text::after {
+      content: "「";
+      position: absolute;
+      opacity: 0.18;
+      font-size: 16px;
+    }
+
+    .sutra-text::before {
+      left: -0.8em;
+      top: -0.3em;
+    }
+
+    .sutra-text::after {
+      content: "」";
+      right: -0.8em;
+      bottom: -0.3em;
+    }
+
+    .translation-label {
+      margin-top: 14px;
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.18em;
+      text-align: center;
+    }
+
+    .translation-text {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--ink-soft);
+      line-height: 1.8;
+      white-space: pre-line;
+      text-align: justify;
+    }
+
+    .result-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .link-button {
+      border: none;
+      background: transparent;
+      padding: 3px 4px;
+      font-size: 11px;
+      color: var(--accent-deep);
+      letter-spacing: 0.16em;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .link-button::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -1px;
+      width: 0;
+      height: 1px;
+      background: linear-gradient(to right, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.6));
+      transition: width var(--transition-slow);
+    }
+
+    .link-button[data-active="true"]::after {
+      width: 100%;
+    }
+
+    .link-button[disabled] {
+      color: rgba(122, 111, 99, 0.6);
+      cursor: default;
+    }
+
+    .panel {
+      margin-top: 8px;
+      padding: 6px 0 2px;
+      border-radius: var(--radius-soft);
+      color: var(--ink-soft);
+      font-size: 11px;
+      line-height: 1.8;
+      white-space: pre-line;
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: opacity var(--transition-slow), max-height var(--transition-slow);
+      text-align: justify;
+    }
+
+    .panel.visible {
+      opacity: 1;
+      max-height: 260px;
+    }
+
+    .panel-label {
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.18em;
+      margin-bottom: 4px;
+    }
+
+    .result-meta-tail {
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--ink-mute);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .route-pill {
+      padding: 2px 6px;
+      border-radius: var(--radius-soft);
+      background: rgba(0, 0, 0, 0.04);
+      font-family: "SF Mono", ui-monospace, "JetBrains Mono", monospace;
+      font-size: 9px;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .foot-note {
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--ink-mute);
+      text-align: right;
+    }
+
+    .foot-note button {
+      border: none;
+      background: transparent;
+      padding: 0;
+      font-size: 10px;
+      color: var(--ink-mute);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .bottom-bar {
+      margin-top: 4px;
+      padding: 6px 6px 0;
+      border-top: 1px solid rgba(0, 0, 0, 0.04);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: var(--ink-mute);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="phone-shell">
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+      <div class="top-bar">
+        <div class="top-bar-left">一  念  入  境</div>
+        <div class="top-bar-right">
+          <span>盲抽</span>
+          <div class="enso"></div>
+        </div>
+      </div>
+
+      <div class="header">
+        <div class="app-title">六  祖  心  签</div>
+        <div class="app-subtitle">不问将来，先看此刻身在何处</div>
+      </div>
+
+      <div class="scroll-area">
+        <div id="flow-container" class="fade-area">
+          <section class="section-block" id="scene-stage">
+            <div class="section-label">观境 · 身在何方</div>
+            <div class="section-title">先看，你此刻更近哪一种场景</div>
+            <div class="choice-row" id="scene-row">
+              <button class="choice-pill" data-value="樊笼">
+                樊笼
+                <div class="choice-meta">职场与生存</div>
+              </button>
+              <button class="choice-pill" data-value="沉浮">
+                沉浮
+                <div class="choice-meta">外物与得失</div>
+              </button>
+              <button class="choice-pill" data-value="尘缘">
+                尘缘
+                <div class="choice-meta">家庭与关系</div>
+              </button>
+              <button class="choice-pill" data-value="方寸">
+                方寸
+                <div class="choice-meta">自我与内省</div>
+              </button>
+            </div>
+          </section>
+
+          <section class="section-block fade-area hidden" id="subscene-stage">
+            <div class="section-label">察心 · 所为何事</div>
+            <div class="section-title">在这个大境里，更像是哪一处起心动念</div>
+            <div class="choice-row" id="subscene-row">
+              <span class="placeholder" id="subscene-placeholder">先轻点上方四境，再看此处缓缓浮现。</span>
+            </div>
+          </section>
+
+          <section class="section-block fade-area hidden" id="option-stage">
+            <div class="section-label">照见 · 执于何念</div>
+            <div class="section-title">从三句里，选一念与你最有共振</div>
+            <div class="abc-list" id="abc-row">
+              <div class="placeholder">选好前一境后，此处会展开三种不同的念头。</div>
+            </div>
+          </section>
+        </div>
+
+        <div id="ritual-layer" class="ritual-layer">
+          <div class="ritual-circle" id="ritual-circle">
+            <div class="ritual-circle-inner">叩  启</div>
+          </div>
+          <div class="ritual-hint">
+            先把目光从屏幕上收回来，<br />
+            只觉一呼一吸，再轻触圆印解此一签。
+          </div>
+          <div class="breath-text" id="breath-text">一吸 · 一呼 · 一念</div>
+        </div>
+
+        <section id="result-section" class="result-section">
+          <div class="result-inner">
+            <div class="result-header">
+              <div class="result-title-main" id="result-title-main">——</div>
+              <div class="result-angle" id="result-angle">从当下心境切入的一句提醒</div>
+            </div>
+            <div class="result-body">
+              <div class="sutra-text" id="sutra-text"></div>
+              <div class="translation-label">小字 · 白话</div>
+              <div class="translation-text" id="translation-text"></div>
+            </div>
+            <div class="line-separator"></div>
+            <div class="result-actions">
+              <button class="link-button" id="btn-analysis" data-active="false">展  开  解析</button>
+              <button class="link-button" id="btn-action" data-active="false" disabled>落  在  行  动</button>
+            </div>
+            <div class="panel" id="panel-analysis">
+              <div class="panel-label">解析</div>
+              <div id="analysis-text"></div>
+            </div>
+            <div class="panel" id="panel-action">
+              <div class="panel-label">行动建议</div>
+              <div id="action-text"></div>
+            </div>
+            <div class="result-meta-tail">
+              <span id="meta-source">出自：——</span>
+            </div>
+            <div class="foot-note">
+              <button type="button" id="btn-reset">重来一念</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="bottom-bar">
+        <div>一期一会 · 此刻仅解此一签</div>
+        <div>经库自动载入 · 无需操作</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./blind_draw_engine.js"></script>
+  <script>
+    const sceneRow = document.getElementById("scene-row");
+    const subsceneRow = document.getElementById("subscene-row");
+    const subsceneStage = document.getElementById("subscene-stage");
+    const subscenePlaceholder = document.getElementById("subscene-placeholder");
+    const optionStage = document.getElementById("option-stage");
+    const abcRow = document.getElementById("abc-row");
+    const flowContainer = document.getElementById("flow-container");
+    const ritualLayer = document.getElementById("ritual-layer");
+    const ritualCircle = document.getElementById("ritual-circle");
+    const breathText = document.getElementById("breath-text");
+    const resultSection = document.getElementById("result-section");
+
+    const resultTitleMain = document.getElementById("result-title-main");
+    const resultAngle = document.getElementById("result-angle");
+    const sutraTextEl = document.getElementById("sutra-text");
+    const translationTextEl = document.getElementById("translation-text");
+    const btnAnalysis = document.getElementById("btn-analysis");
+    const btnAction = document.getElementById("btn-action");
+    const panelAnalysis = document.getElementById("panel-analysis");
+    const panelAction = document.getElementById("panel-action");
+    const analysisTextEl = document.getElementById("analysis-text");
+    const actionTextEl = document.getElementById("action-text");
+    const metaSource = document.getElementById("meta-source");
+    const btnReset = document.getElementById("btn-reset");
+
+    const subsceneDict = {
+      樊笼: [
+        "樊笼-形如槁木",
+        "樊笼-戾气横生",
+        "樊笼-疲于奔命"
+      ],
+      沉浮: [
+        "沉浮-求之不得",
+        "沉浮-无常忽至",
+        "沉浮-意平难伏"
+      ],
+      尘缘: [
+        "尘缘-嗔心顿起",
+        "尘缘-力不从心",
+        "尘缘-孤影自怜"
+      ],
+      方寸: [
+        "方寸-妄念纷飞",
+        "方寸-百念皆灰",
+        "方寸-灵台清明"
+      ]
+    };
+
+    const optionText = {
+      "樊笼-形如槁木": {
+        A: "仰高不及，颓卧尘埃。",
+        B: "见势不公，撒手任荒。",
+        C: "灯油枯尽，但求隐翳。"
+      },
+      "樊笼-戾气横生": {
+        A: "妄求事顺，反动无明。",
+        B: "遇事乖违，逆鳞尽起。",
+        C: "无名火起，满目皆敌。"
+      },
+      "樊笼-疲于奔命": {
+        A: "妄揽千钧，反受其累。",
+        B: "负重涉泥，积怨难平。",
+        C: "诸事纷乱，困步迷局。"
+      },
+      "沉浮-求之不得": {
+        A: "向外驰求，反落虚空。",
+        B: "觉世相负，怨结于心。",
+        C: "旧梦已逝，前路无明。"
+      },
+      "沉浮-无常忽至": {
+        A: "执守旧门，拒认骤雨。",
+        B: "逢变生嗔，诘问无常。",
+        C: "惊霜冻步，身心俱僵。"
+      },
+      "沉浮-意平难伏": {
+        A: "仰高心乱，见优生妒。",
+        B: "伏处低眉，心演千局。",
+        C: "泥足两岸，进退失据。"
+      },
+      "尘缘-嗔心顿起": {
+        A: "以爱为名，执念作缚。",
+        B: "触鳞即伤，柔语化刃。",
+        C: "相顾无言，心门闭锁。"
+      },
+      "尘缘-力不从心": {
+        A: "妄揽因果，越界反伤。",
+        B: "步步退让，委曲蚀心。",
+        C: "缘缚手脚，茧困深恩。"
+      },
+      "尘缘-孤影自怜": {
+        A: "渴求全解，徒惹失落。",
+        B: "高筑心墙，拒人千里。",
+        C: "闹市孤灯，拥攘觉寒。"
+      },
+      "方寸-妄念纷飞": {
+        A: "惧空狂抓，溺于万讯。",
+        B: "咀嚼旧憾，痛反前尘。",
+        C: "预演百劫，忧缠未至。"
+      },
+      "方寸-百念皆灰": {
+        A: "信念崩塌，万物失色。",
+        B: "冰封六感，闭心绝防。",
+        C: "仅余形骸，机械度日。"
+      },
+      "方寸-灵台清明": {
+        A: "欲弃又执，困于极简。",
+        B: "厌弃两端，强求中道。",
+        C: "盲候明灯，空觉欠缺。"
+      }
+    };
+
+    const state = {
+      scene: "",
+      subscene: "",
+      option: "",
+      reqKey: ""
+    };
+
+    let mode = "select"; // "select" | "ritual" | "result"
+
+    let items = null; // Array of textMaterial items
+    let lastDrawItem = null;
+
+    function clearSelection(container, selector) {
+      Array.from(container.querySelectorAll(selector)).forEach((el) => {
+        el.dataset.selected = "false";
+      });
+    }
+
+    function setMode(next) {
+      mode = next;
+      if (mode === "select") {
+        flowContainer.classList.remove("hidden");
+        flowContainer.classList.remove("fade-area");
+        void flowContainer.offsetWidth;
+        flowContainer.classList.add("fade-area");
+        flowContainer.style.opacity = "1";
+        ritualLayer.classList.remove("visible", "busy");
+        resultSection.classList.remove("visible");
+      } else if (mode === "ritual") {
+        ritualLayer.classList.remove("busy");
+        resultSection.classList.remove("visible");
+        ritualLayer.classList.add("visible");
+      } else if (mode === "result") {
+        ritualLayer.classList.remove("visible", "busy");
+        resultSection.classList.add("visible");
+      }
+    }
+
+    function updateReqKey() {
+      if (state.scene && state.subscene && state.option) {
+        state.reqKey = state.subscene + "_Option_" + state.option;
+      } else {
+        state.reqKey = "";
+      }
+    }
+
+    async function tryAutoLoad() {
+      try {
+        const res = await fetch("../text/textMaterial.json", { cache: "no-store" });
+        if (!res.ok) throw new Error("http " + res.status);
+        const json = await res.json();
+        if (!Array.isArray(json)) throw new Error("invalid json");
+        items = json;
+      } catch (e) {
+        items = null;
+      }
+    }
+
+    sceneRow.addEventListener("click", (e) => {
+      const pill = e.target.closest(".choice-pill");
+      if (!pill) return;
+      const value = pill.dataset.value;
+      clearSelection(sceneRow, ".choice-pill");
+      pill.dataset.selected = "true";
+      state.scene = value;
+      state.subscene = "";
+      state.option = "";
+      updateReqKey();
+
+      subscenePlaceholder && subscenePlaceholder.remove();
+      subsceneStage.classList.remove("hidden");
+      void subsceneStage.offsetWidth;
+      subsceneStage.classList.add("fade-area");
+
+      renderSubscenes(value);
+      abcRow.innerHTML = '<div class="placeholder">先认清处境，再来看这一念。</div>';
+    });
+
+    function renderSubscenes(sceneValue) {
+      subsceneRow.innerHTML = "";
+      const list = subsceneDict[sceneValue] || [];
+      list.forEach((fullName) => {
+        const short = fullName.includes("-") ? fullName.split("-")[1] : fullName;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "choice-pill";
+        btn.dataset.value = fullName;
+        btn.textContent = short;
+        subsceneRow.appendChild(btn);
+      });
+    }
+
+    subsceneRow.addEventListener("click", (e) => {
+      const pill = e.target.closest(".choice-pill");
+      if (!pill) return;
+      if (!state.scene) return;
+      const value = pill.dataset.value;
+      clearSelection(subsceneRow, ".choice-pill");
+      pill.dataset.selected = "true";
+      state.subscene = value;
+      state.option = "";
+      updateReqKey();
+
+      optionStage.classList.remove("hidden");
+      void optionStage.offsetWidth;
+      optionStage.classList.add("fade-area");
+      renderOptions(value);
+    });
+
+    function renderOptions(subscene) {
+      abcRow.innerHTML = "";
+      const texts = optionText[subscene] || {};
+      ["A", "B", "C"].forEach((letter) => {
+        const sentence = texts[letter] || "";
+        const wrap = document.createElement("div");
+        wrap.className = "abc-item";
+        wrap.dataset.letter = letter;
+        wrap.innerHTML =
+          '<div class="abc-item-label">' +
+          letter +
+          "</div>" +
+          '<div class="abc-item-text">' +
+          sentence +
+          "</div>";
+        abcRow.appendChild(wrap);
+      });
+    }
+
+    abcRow.addEventListener("click", (e) => {
+      const item = e.target.closest(".abc-item");
+      if (!item) return;
+      if (!state.scene || !state.subscene) return;
+      const letter = item.dataset.letter;
+      clearSelection(abcRow, ".abc-item");
+      item.dataset.selected = "true";
+      state.option = letter;
+      updateReqKey();
+
+      setTimeout(() => {
+        flowContainer.classList.add("hidden");
+        setMode("ritual");
+      }, 400);
+    });
+
+    function renderResult(item) {
+      const subscene = state.subscene || "当下处境";
+      const title = item && item.title ? String(item.title) : "——";
+      const text = item && item.text ? String(item.text) : "";
+      const translation = item && item.ui_translation ? String(item.ui_translation) : "";
+      const mapping = item && item.ui_mapping ? String(item.ui_mapping) : "";
+      const action = item && item.ui_action ? String(item.ui_action) : "";
+      const sourceRaw = item && item.source != null ? String(item.source) : "——";
+
+      const sourceMap = {
+        liuzutanjing: "六祖坛经",
+        jingangjing: "金刚经"
+      };
+      const sourceLabel = sourceMap[sourceRaw] || sourceRaw || "——";
+
+      resultTitleMain.textContent = title;
+      resultAngle.textContent = "";
+      sutraTextEl.textContent = text;
+      translationTextEl.textContent = translation;
+      analysisTextEl.textContent = mapping;
+      actionTextEl.textContent = action;
+      metaSource.textContent = "出自：" + sourceLabel;
+
+      btnAnalysis.dataset.active = "false";
+      btnAction.dataset.active = "false";
+      btnAction.disabled = true;
+      panelAnalysis.classList.remove("visible");
+      panelAction.classList.remove("visible");
+    }
+
+    ritualCircle.addEventListener("click", () => {
+      if (mode !== "ritual" || ritualLayer.classList.contains("busy")) return;
+      if (!items || !Array.isArray(items)) {
+        breathText.textContent = "经库未能载入，可稍后重试。";
+        return;
+      }
+      ritualLayer.classList.add("busy");
+      breathText.textContent = "一吸 · 一呼 · 待片刻";
+
+      setTimeout(() => {
+        const picked = window.BlindDrawEngine.blindDrawOnce(items, state.reqKey);
+        if (!picked) {
+          const fallback = {
+            title: "无签可得",
+            text: "此一念下，尚未有可用签文。\n\n可换一境，再叩启。",
+            ui_translation: "",
+            ui_mapping: "",
+            ui_action: "",
+            source: "——",
+            index: "——",
+            angle: ""
+          };
+          lastDrawItem = null;
+          renderResult(fallback);
+        } else {
+          lastDrawItem = picked;
+          renderResult(picked);
+        }
+        setMode("result");
+      }, 1300);
+    });
+
+    btnAnalysis.addEventListener("click", () => {
+      const isActive = btnAnalysis.dataset.active === "true";
+      if (isActive) {
+        btnAnalysis.dataset.active = "false";
+        panelAnalysis.classList.remove("visible");
+        btnAction.disabled = true;
+        btnAction.dataset.active = "false";
+        panelAction.classList.remove("visible");
+      } else {
+        btnAnalysis.dataset.active = "true";
+        panelAnalysis.classList.add("visible");
+        btnAction.disabled = false;
+      }
+    });
+
+    btnAction.addEventListener("click", () => {
+      if (btnAction.disabled) return;
+      const isActive = btnAction.dataset.active === "true";
+      if (isActive) {
+        btnAction.dataset.active = "false";
+        panelAction.classList.remove("visible");
+      } else {
+        btnAction.dataset.active = "true";
+        panelAction.classList.add("visible");
+      }
+    });
+
+    btnReset.addEventListener("click", () => {
+      state.scene = "";
+      state.subscene = "";
+      state.option = "";
+      state.reqKey = "";
+      lastDrawItem = null;
+
+      clearSelection(sceneRow, ".choice-pill");
+      subsceneRow.innerHTML =
+        '<span class="placeholder" id="subscene-placeholder">先轻点上方四境，再看此处缓缓浮现。</span>';
+      abcRow.innerHTML =
+        '<div class="placeholder">选好前一境后，此处会展开三种不同的念头。</div>';
+
+      subsceneStage.classList.add("hidden");
+      optionStage.classList.add("hidden");
+      flowContainer.classList.remove("hidden");
+      setMode("select");
+    });
+
+    tryAutoLoad();
+  </script>
+</body>
+</html>
+
+
