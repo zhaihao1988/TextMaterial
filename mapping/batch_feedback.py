@@ -64,8 +64,11 @@ from lm_studio_smoke_test import (
     fetch_models,
     get_base_url,
     get_loaded_llm_key,
+    get_qwen_tag_llm_key,
 )
 from one_round_demo import (
+    FIXED_MAIN_MODEL_KEY,
+    FIXED_TAG_MODEL_KEY,
     PROMPT_SCENE_TEMPLATE,
     SCENE_CATEGORIES,
     build_req_keys_text,
@@ -165,12 +168,17 @@ def run_batch(
     scenarios_path: Path,
     limit: int | None,
     base_url: str,
-    model_key: str,
+    main_model_key: str,
+    tag_model_key: str,
     valid_req_keys: list[str],
     req_keys_text: str,
     items: list,
 ) -> tuple[int, int]:
-    """处理场景列表：每场景选 req_key、抽 20 次（去重）、打分并追加到 feedback_log。支持断点续传。返回 (成功场景数, 成功记录数)。"""
+    """处理场景列表：
+    - 选标签：使用 tag_model_key（Qwen 专用）；
+    - 场景+签文打分：使用 main_model_key（glm 主模型）。
+    抽 20 次（去重）、打分并追加到 feedback_log。支持断点续传。返回 (成功场景数, 成功记录数)。
+    """
     scenarios = load_scenarios(scenarios_path)
     if not scenarios:
         return 0, 0
@@ -210,7 +218,7 @@ def run_batch(
         try:
             tag_reply = _lm_chat_with_retry(
                 base_url,
-                model_key,
+                tag_model_key,
                 make_prompt_tag(scene_text, req_keys_text),
                 CHAT_TIMEOUT,
             )
@@ -247,7 +255,7 @@ def run_batch(
             try:
                 feedback_reply = _lm_chat_with_retry(
                     base_url,
-                    model_key,
+                    main_model_key,
                     make_prompt_feedback(scene_text, result_text),
                     CHAT_TIMEOUT,
                 )
@@ -355,11 +363,38 @@ def main() -> int:
     except Exception as e:
         print(f"连接 LM Studio 失败: {e}", file=sys.stderr)
         return 1
-    model_key = get_loaded_llm_key(models)
-    if not model_key:
-        print("未发现已加载的 LLM，请在 LM Studio 中加载模型。", file=sys.stderr)
+
+    # 收集已加载的 LLM key，便于检查固定 key 是否存在
+    loaded_llm_keys: set[str] = set()
+    for m in models:
+        if m.get("type") != "llm":
+            continue
+        if not m.get("loaded_instances"):
+            continue
+        key = m.get("key") or ""
+        if key:
+            loaded_llm_keys.add(key)
+
+    # 主模型：优先固定 glm-4.7，若未加载则退回旧逻辑
+    if FIXED_MAIN_MODEL_KEY in loaded_llm_keys:
+        main_model_key = FIXED_MAIN_MODEL_KEY
+    else:
+        main_model_key = get_loaded_llm_key(models)
+
+    # 标签模型：优先固定 qwen2.5-7b-instruct-mlx，若未加载则退回 Qwen 选择逻辑
+    if FIXED_TAG_MODEL_KEY in loaded_llm_keys:
+        tag_model_key = FIXED_TAG_MODEL_KEY
+    else:
+        tag_model_key = get_qwen_tag_llm_key(models)
+
+    if not main_model_key:
+        print("未发现已加载的主 LLM，请在 LM Studio 中加载模型。", file=sys.stderr)
         return 1
-    print(f"使用模型: {model_key}", flush=True)
+    if not tag_model_key:
+        print("未发现用于选标签的 Qwen 模型（key 中需包含 'qwen'，优先 'qwen2.5-7b-instruct'）。", file=sys.stderr)
+        return 1
+    print(f"使用主模型: {main_model_key}", flush=True)
+    print(f"使用 Qwen 模型（选标签专用）: {tag_model_key}", flush=True)
 
     if args.gen_scenarios is not None:
         n = args.gen_scenarios
@@ -368,7 +403,7 @@ def main() -> int:
             print(f"已开启 --overwrite-scenarios，将先清空再生成 {n} 条场景到 {args.scenarios} ...", flush=True)
         else:
             print(f"生成 {n} 条场景到 {args.scenarios}（追加）...", flush=True)
-        written = generate_scenarios(n, base_url, model_key, args.scenarios, overwrite=overwrite)
+        written = generate_scenarios(n, base_url, main_model_key, args.scenarios, overwrite=overwrite)
         print(f"已写入 {written} 条。跑批请执行: python mapping/batch_feedback.py", flush=True)
         return 0
 
@@ -387,7 +422,8 @@ def main() -> int:
         args.scenarios,
         args.limit,
         base_url,
-        model_key,
+        main_model_key,
+        tag_model_key,
         valid_req_keys,
         req_keys_text,
         items,
