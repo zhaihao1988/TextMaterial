@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>六祖 · 盲抽原型</title>
+  <title>观心引</title>
   <style>
     :root {
       --bg-root: #f7f3e8;
@@ -76,6 +76,19 @@
       padding: 14px 14px 12px;
       display: flex;
       flex-direction: column;
+      transition: background 2s ease;
+    }
+
+    .phone-screen.in-trance {
+      background: radial-gradient(circle at top left, #e4decb 0, #d2c8b1 45%, #c0b59c 100%);
+    }
+
+    .phone-screen.in-trance .top-bar,
+    .phone-screen.in-trance .header,
+    .phone-screen.in-trance .bottom-bar,
+    .phone-screen.in-trance .input-area {
+      opacity: 0.1;
+      transition: opacity 2s ease;
     }
 
     .top-bar {
@@ -128,7 +141,12 @@
       flex: 1;
       margin-top: 6px;
       padding-right: 4px;
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr;
       overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
     }
 
     .fade-area {
@@ -144,15 +162,11 @@
     }
 
     .section-label {
-      font-size: 11px;
+      font-size: 13px;
       color: var(--ink-mute);
-      letter-spacing: 0.2em;
+      letter-spacing: 0.8em;
+      margin-left: 0.4em;
       margin-bottom: 2px;
-    }
-
-    .section-title {
-      font-size: 14px;
-      color: var(--ink-main);
     }
 
     .section-block {
@@ -166,7 +180,7 @@
     }
 
     .choice-row {
-      margin-top: 8px;
+      margin-top: 12px;
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
@@ -182,7 +196,19 @@
       cursor: pointer;
       position: relative;
       overflow: hidden;
-      transition: color var(--transition-slow);
+      transition:
+        color var(--transition-slow),
+        opacity var(--transition-slow),
+        filter var(--transition-slow);
+    }
+
+    /* 渐入心门：先小后大 */
+    #scene-stage .choice-pill {
+      font-size: 12px;
+    }
+
+    #subscene-stage .choice-pill {
+      font-size: 14px;
     }
 
     .choice-pill::after {
@@ -228,26 +254,25 @@
       gap: 4px;
     }
 
+    /* 照见：三行诗 */
     .abc-item {
       display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 4px 2px;
-      border-radius: var(--radius-soft);
+      align-items: center;
+      justify-content: center;
+      padding: 14px 8px;
+      margin-bottom: 6px;
+      border-radius: 2px;
       cursor: pointer;
-      transition: background var(--transition-slow), color var(--transition-slow);
-    }
-
-    .abc-item-label {
-      min-width: 1.5em;
-      font-size: 12px;
-      color: var(--ink-mute);
+      transition: all 0.8s ease;
     }
 
     .abc-item-text {
-      font-size: 12px;
+      font-size: 15px;
       color: var(--ink-soft);
-      line-height: 1.5;
+      line-height: 1.7;
+      text-align: center;
+      letter-spacing: 0.1em;
+      transition: all 0.8s ease;
     }
 
     .abc-item[data-selected="true"] {
@@ -255,12 +280,19 @@
       color: var(--ink-main);
     }
 
-    .abc-item[data-selected="true"] .abc-item-label {
-      color: var(--ink-main);
-    }
-
     .abc-item[data-selected="true"] .abc-item-text {
       color: var(--ink-main);
+      text-shadow: 0 0 0.8px rgba(60, 48, 34, 0.5);
+      transform: scale(1.02);
+    }
+
+    .choice-row:has(.choice-pill[data-selected="true"]) .choice-pill:not([data-selected="true"]) {
+      opacity: 0.35;
+      filter: grayscale(100%);
+    }
+
+    .abc-list:has(.abc-item[data-selected="true"]) .abc-item:not([data-selected="true"]) {
+      opacity: 0.25;
     }
 
     .placeholder {
@@ -275,12 +307,14 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px 10px 10px;
+      padding: 8px 10px;
       text-align: center;
       transition: opacity var(--transition-slow), transform var(--transition-slow);
       opacity: 0;
       transform: translateY(10px);
       pointer-events: none;
+      align-self: center;
+      justify-self: center;
     }
 
     .ritual-layer.visible {
@@ -301,19 +335,65 @@
       justify-content: center;
       box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
       cursor: pointer;
-      transition: transform 0.6s ease-out, box-shadow 0.6s ease-out, border-color 0.6s ease-out;
+      transition:
+        transform 0.6s ease-out,
+        box-shadow 3s linear,
+        border-color 0.6s ease-out;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ritual-circle::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      background: var(--ink-soft);
+      border-radius: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      opacity: 0;
+      transition:
+        transform 3s ease-in,
+        opacity 0.3s ease-out;
+      z-index: 0;
     }
 
     .ritual-circle-inner {
       font-size: 18px;
       letter-spacing: 0.35em;
       color: var(--ink-main);
+      transition: all 0.6s ease-out;
+      position: relative;
+      z-index: 1;
     }
 
     .ritual-circle:hover {
       transform: translateY(-2px);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.16);
       border-color: rgba(0, 0, 0, 0.6);
+    }
+
+    .ritual-circle.pressing::before {
+      transform: translate(-50%, -50%) scale(15);
+      opacity: 0.15;
+    }
+
+    .ritual-circle.pressing {
+      box-shadow: 0 26px 60px rgba(0, 0, 0, 0.22);
+      border-color: rgba(0, 0, 0, 0.7);
+      transform: scale(1.02);
+    }
+
+    .ritual-circle.pressing .ritual-circle-inner {
+      filter: blur(4px);
+      opacity: 0.2;
+      transform: scale(1.05);
+      letter-spacing: 0.6em;
+      transition: all 3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
 
     .ritual-hint {
@@ -330,32 +410,7 @@
       letter-spacing: 0.18em;
     }
 
-    .ritual-layer.busy .ritual-circle {
-      animation: pulse 1.3s ease-in-out infinite;
-      cursor: default;
-    }
-
-    .ritual-layer.busy .ritual-circle-inner {
-      opacity: 0.4;
-    }
-
-    @keyframes pulse {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
-      }
-      50% {
-        transform: scale(1.04);
-        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
-      }
-      100% {
-        transform: scale(1);
-        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
-      }
-    }
-
     .result-section {
-      margin-top: 8px;
       padding: 16px 0 10px;
       border-radius: var(--radius-soft);
       background: radial-gradient(circle at top, #fbf8f0 0, #f4eee2 40%, #ede4d7 100%);
@@ -365,6 +420,8 @@
       opacity: 0;
       transition: opacity var(--transition-slow), transform var(--transition-slow);
       pointer-events: none;
+      align-self: center;
+      justify-self: center;
     }
 
     .result-section.visible {
@@ -384,10 +441,11 @@
     }
 
     .result-title-main {
-      font-size: 18px;
-      letter-spacing: 0.22em;
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: 0.25em;
       color: var(--ink-main);
-      margin-bottom: 4px;
+      margin-bottom: 8px;
     }
 
     .result-angle {
@@ -402,13 +460,13 @@
     }
 
     .sutra-text {
-      font-size: 13px;
-      line-height: 2;
+      font-size: 14px;
+      line-height: 2.2;
       color: var(--ink-main);
       white-space: pre-line;
       max-width: 85%;
       margin: 0 auto;
-      text-align: left;
+      text-align: justify;
       position: relative;
     }
 
@@ -432,67 +490,72 @@
     }
 
     .translation-label {
-      margin-top: 14px;
-      font-size: 11px;
+      margin: 20px 0 8px;
+      font-size: 10px;
       color: var(--ink-mute);
-      letter-spacing: 0.18em;
+      letter-spacing: 0.4em;
       text-align: center;
     }
 
     .translation-text {
-      margin-top: 4px;
+      margin-top: 2px;
       font-size: 11px;
       color: var(--ink-soft);
+      opacity: 0.85;
       line-height: 1.8;
       white-space: pre-line;
       text-align: justify;
+      font-weight: 300;
     }
 
-    .result-actions {
-      margin-top: 12px;
+
+    .insight-trigger {
+      margin-top: 14px;
       display: flex;
-      gap: 8px;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
+      gap: 4px;
     }
 
-    .link-button {
+    .insight-seal {
       border: none;
-      background: transparent;
-      padding: 3px 4px;
+      background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.4), transparent 70%),
+        rgba(139, 58, 58, 0.88);
+      padding: 4px 10px;
+      border-radius: 4px;
       font-size: 11px;
-      color: var(--accent-deep);
-      letter-spacing: 0.16em;
+      letter-spacing: 0.22em;
+      color: #fdf6ec;
       cursor: pointer;
-      position: relative;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+      transition: transform 0.4s ease-out, box-shadow 0.4s ease-out, background 0.4s ease-out;
     }
 
-    .link-button::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      bottom: -1px;
-      width: 0;
-      height: 1px;
-      background: linear-gradient(to right, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.6));
-      transition: width var(--transition-slow);
+    .insight-seal:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
     }
 
-    .link-button[data-active="true"]::after {
-      width: 100%;
+    .insight-seal:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+      background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.2), transparent 70%),
+        rgba(111, 45, 45, 0.95);
     }
 
-    .link-button[disabled] {
-      color: rgba(122, 111, 99, 0.6);
-      cursor: default;
+    .insight-hint {
+      font-size: 10px;
+      color: var(--ink-mute);
+      text-align: center;
+      line-height: 1.6;
     }
 
-    .panel {
-      margin-top: 8px;
-      padding: 6px 0 2px;
+    .insight-area {
+      margin-top: 10px;
+      padding: 8px 0 2px;
       border-radius: var(--radius-soft);
-      color: var(--ink-soft);
-      font-size: 11px;
+      color: rgba(60, 48, 34, 0.9);
+      font-size: 10.5px;
       line-height: 1.8;
       white-space: pre-line;
       opacity: 0;
@@ -502,16 +565,10 @@
       text-align: justify;
     }
 
-    .panel.visible {
+    .insight-area.visible {
       opacity: 1;
-      max-height: 260px;
-    }
-
-    .panel-label {
-      font-size: 11px;
-      color: var(--ink-mute);
-      letter-spacing: 0.18em;
-      margin-bottom: 4px;
+      max-height: 999px; /* 预留足够空间，避免内容被截断 */
+      overflow-y: auto;
     }
 
     .result-meta-tail {
@@ -563,8 +620,75 @@
       color: var(--ink-mute);
     }
 
-    .hidden {
-      display: none !important;
+    #flow-container,
+    #ritual-layer,
+    #result-section {
+      grid-column: 1 / 2;
+      grid-row: 1 / 2;
+      width: 100%;
+    }
+
+    .input-area {
+      margin-top: 4px;
+      padding: 4px 6px 2px;
+      border-top: 1px solid rgba(0, 0, 0, 0.03);
+    }
+
+    .input-inner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-text {
+      flex: 1;
+      border: none;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+      background: transparent;
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--ink-soft);
+      padding: 3px 0 4px;
+      outline: none;
+      transition: border-color var(--transition-slow);
+    }
+
+    .input-text::placeholder {
+      color: var(--ink-mute);
+    }
+
+    .input-text:focus {
+      border-bottom-color: var(--ink-soft);
+    }
+
+    .icon-button {
+      border: none;
+      background: transparent;
+      padding: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--ink-soft);
+      transition: transform 0.25s ease-out, color 0.25s ease-out;
+    }
+
+    .icon-button svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.4;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .icon-button:hover {
+      transform: translateY(-0.5px);
+      color: var(--ink-main);
+    }
+
+    .icon-button:active {
+      transform: translateY(0);
     }
   </style>
 </head>
@@ -575,21 +699,19 @@
       <div class="top-bar">
         <div class="top-bar-left">一  念  入  境</div>
         <div class="top-bar-right">
-          <span>盲抽</span>
           <div class="enso"></div>
         </div>
       </div>
 
       <div class="header">
-        <div class="app-title">六  祖  心  签</div>
+        <div class="app-title">观  心  引</div>
         <div class="app-subtitle">不问将来，先看此刻身在何处</div>
       </div>
 
       <div class="scroll-area">
         <div id="flow-container" class="fade-area">
           <section class="section-block" id="scene-stage">
-            <div class="section-label">观境 · 身在何方</div>
-            <div class="section-title">先看，你此刻更近哪一种场景</div>
+            <div class="section-label">观 境</div>
             <div class="choice-row" id="scene-row">
               <button class="choice-pill" data-value="樊笼">
                 樊笼
@@ -611,16 +733,14 @@
           </section>
 
           <section class="section-block fade-area hidden" id="subscene-stage">
-            <div class="section-label">察心 · 所为何事</div>
-            <div class="section-title">在这个大境里，更像是哪一处起心动念</div>
+            <div class="section-label">察 心</div>
             <div class="choice-row" id="subscene-row">
               <span class="placeholder" id="subscene-placeholder">先轻点上方四境，再看此处缓缓浮现。</span>
             </div>
           </section>
 
           <section class="section-block fade-area hidden" id="option-stage">
-            <div class="section-label">照见 · 执于何念</div>
-            <div class="section-title">从三句里，选一念与你最有共振</div>
+            <div class="section-label">照 见</div>
             <div class="abc-list" id="abc-row">
               <div class="placeholder">选好前一境后，此处会展开三种不同的念头。</div>
             </div>
@@ -646,41 +766,62 @@
             </div>
             <div class="result-body">
               <div class="sutra-text" id="sutra-text"></div>
-              <div class="translation-label">小字 · 白话</div>
+              <div class="translation-label">释  意</div>
               <div class="translation-text" id="translation-text"></div>
             </div>
             <div class="line-separator"></div>
-            <div class="result-actions">
-              <button class="link-button" id="btn-analysis" data-active="false">展  开  解析</button>
-              <button class="link-button" id="btn-action" data-active="false" disabled>落  在  行  动</button>
+            <div class="insight-trigger">
+              <button class="insight-seal" id="btn-insight">参  悟</button>
+              <div class="insight-hint">不急着懂，一念欲明时，再轻触此印。</div>
             </div>
-            <div class="panel" id="panel-analysis">
-              <div class="panel-label">解析</div>
-              <div id="analysis-text"></div>
-            </div>
-            <div class="panel" id="panel-action">
-              <div class="panel-label">行动建议</div>
-              <div id="action-text"></div>
+            <div class="insight-area" id="insight-area">
+              <div id="insight-text"></div>
             </div>
             <div class="result-meta-tail">
               <span id="meta-source">出自：——</span>
             </div>
             <div class="foot-note">
-              <button type="button" id="btn-reset">重来一念</button>
+              <button type="button" id="btn-reset">[ 归 隐 · 再 起 一 念 ]</button>
             </div>
           </div>
         </section>
       </div>
 
+      <div id="input-stage" class="input-area fade-area">
+        <div class="input-inner">
+          <input
+            id="user-intent"
+            class="input-text"
+            type="text"
+            placeholder="或于此默念所求，不必尽言于外。"
+            autocomplete="off"
+          />
+          <button class="icon-button" type="button" aria-label="语音输入（尚未接通）">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="6" y1="16" x2="6" y2="8" />
+              <line x1="10" y1="18" x2="10" y2="6" />
+              <line x1="14" y1="16" x2="14" y2="8" />
+              <line x1="18" y1="14" x2="18" y2="10" />
+            </svg>
+          </button>
+          <button class="icon-button" type="button" aria-label="送出心念（尚未接通）">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 19L19 5" />
+              <polyline points="9 5 19 5 19 15" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <div class="bottom-bar">
-        <div>一期一会 · 此刻仅解此一签</div>
-        <div>经库自动载入 · 无需操作</div>
+        <div style="margin: 0 auto; text-align: center; width: 100%;">一期一会 · 此刻仅解此一签</div>
       </div>
     </div>
   </div>
 
   <script src="./blind_draw_engine.js"></script>
   <script>
+    const phoneScreen = document.querySelector(".phone-screen");
     const sceneRow = document.getElementById("scene-row");
     const subsceneRow = document.getElementById("subscene-row");
     const subsceneStage = document.getElementById("subscene-stage");
@@ -688,6 +829,8 @@
     const optionStage = document.getElementById("option-stage");
     const abcRow = document.getElementById("abc-row");
     const flowContainer = document.getElementById("flow-container");
+    const inputStage = document.getElementById("input-stage");
+    const userIntentInput = document.getElementById("user-intent");
     const ritualLayer = document.getElementById("ritual-layer");
     const ritualCircle = document.getElementById("ritual-circle");
     const breathText = document.getElementById("breath-text");
@@ -697,12 +840,9 @@
     const resultAngle = document.getElementById("result-angle");
     const sutraTextEl = document.getElementById("sutra-text");
     const translationTextEl = document.getElementById("translation-text");
-    const btnAnalysis = document.getElementById("btn-analysis");
-    const btnAction = document.getElementById("btn-action");
-    const panelAnalysis = document.getElementById("panel-analysis");
-    const panelAction = document.getElementById("panel-action");
-    const analysisTextEl = document.getElementById("analysis-text");
-    const actionTextEl = document.getElementById("action-text");
+    const btnInsight = document.getElementById("btn-insight");
+    const insightArea = document.getElementById("insight-area");
+    const insightTextEl = document.getElementById("insight-text");
     const metaSource = document.getElementById("meta-source");
     const btnReset = document.getElementById("btn-reset");
 
@@ -804,6 +944,10 @@
     let items = null; // Array of textMaterial items
     let lastDrawItem = null;
 
+    let pressTimer = null;
+    let pressActive = false;
+    let longPressTriggered = false;
+
     function clearSelection(container, selector) {
       Array.from(container.querySelectorAll(selector)).forEach((el) => {
         el.dataset.selected = "false";
@@ -818,14 +962,16 @@
         void flowContainer.offsetWidth;
         flowContainer.classList.add("fade-area");
         flowContainer.style.opacity = "1";
-        ritualLayer.classList.remove("visible", "busy");
+        inputStage.classList.remove("hidden");
+        ritualLayer.classList.remove("visible");
         resultSection.classList.remove("visible");
       } else if (mode === "ritual") {
-        ritualLayer.classList.remove("busy");
+        inputStage.classList.add("hidden");
         resultSection.classList.remove("visible");
         ritualLayer.classList.add("visible");
       } else if (mode === "result") {
-        ritualLayer.classList.remove("visible", "busy");
+        inputStage.classList.add("hidden");
+        ritualLayer.classList.remove("visible");
         resultSection.classList.add("visible");
       }
     }
@@ -909,13 +1055,7 @@
         const wrap = document.createElement("div");
         wrap.className = "abc-item";
         wrap.dataset.letter = letter;
-        wrap.innerHTML =
-          '<div class="abc-item-label">' +
-          letter +
-          "</div>" +
-          '<div class="abc-item-text">' +
-          sentence +
-          "</div>";
+        wrap.innerHTML = '<div class="abc-item-text">' + sentence + "</div>";
         abcRow.appendChild(wrap);
       });
     }
@@ -955,73 +1095,103 @@
       resultAngle.textContent = "";
       sutraTextEl.textContent = text;
       translationTextEl.textContent = translation;
-      analysisTextEl.textContent = mapping;
-      actionTextEl.textContent = action;
-      metaSource.textContent = "出自：" + sourceLabel;
 
-      btnAnalysis.dataset.active = "false";
-      btnAction.dataset.active = "false";
-      btnAction.disabled = true;
-      panelAnalysis.classList.remove("visible");
-      panelAction.classList.remove("visible");
+      const hasMapping = mapping && mapping.trim().length > 0;
+      const hasAction = action && action.trim().length > 0;
+      let combined = "";
+      if (hasMapping) {
+        combined += mapping.trim();
+      }
+      if (hasAction) {
+        combined += (combined ? "\n\n「 行 」\n" : "「 行 」\n") + action.trim();
+      }
+      insightTextEl.textContent = combined;
+      insightArea.classList.remove("visible");
+      metaSource.textContent = "出自：" + sourceLabel;
     }
 
-    ritualCircle.addEventListener("click", () => {
-      if (mode !== "ritual" || ritualLayer.classList.contains("busy")) return;
+    function performDraw() {
       if (!items || !Array.isArray(items)) {
         breathText.textContent = "经库未能载入，可稍后重试。";
         return;
       }
-      ritualLayer.classList.add("busy");
-      breathText.textContent = "一吸 · 一呼 · 待片刻";
-
-      setTimeout(() => {
-        const picked = window.BlindDrawEngine.blindDrawOnce(items, state.reqKey);
-        if (!picked) {
-          const fallback = {
-            title: "无签可得",
-            text: "此一念下，尚未有可用签文。\n\n可换一境，再叩启。",
-            ui_translation: "",
-            ui_mapping: "",
-            ui_action: "",
-            source: "——",
-            index: "——",
-            angle: ""
-          };
-          lastDrawItem = null;
-          renderResult(fallback);
-        } else {
-          lastDrawItem = picked;
-          renderResult(picked);
-        }
-        setMode("result");
-      }, 1300);
-    });
-
-    btnAnalysis.addEventListener("click", () => {
-      const isActive = btnAnalysis.dataset.active === "true";
-      if (isActive) {
-        btnAnalysis.dataset.active = "false";
-        panelAnalysis.classList.remove("visible");
-        btnAction.disabled = true;
-        btnAction.dataset.active = "false";
-        panelAction.classList.remove("visible");
+      breathText.textContent = "心定 · 门开...";
+      const picked = window.BlindDrawEngine.blindDrawOnce(items, state.reqKey);
+      if (!picked) {
+        const fallback = {
+          title: "无签可得",
+          text: "此一念下，尚未有可用签文。\n\n可换一境，再叩启。",
+          ui_translation: "",
+          ui_mapping: "",
+          ui_action: "",
+          source: "——",
+          index: "——",
+          angle: ""
+        };
+        lastDrawItem = null;
+        renderResult(fallback);
       } else {
-        btnAnalysis.dataset.active = "true";
-        panelAnalysis.classList.add("visible");
-        btnAction.disabled = false;
+        lastDrawItem = picked;
+        renderResult(picked);
       }
-    });
+      setTimeout(() => {
+        setMode("result");
+      }, 200);
+    }
 
-    btnAction.addEventListener("click", () => {
-      if (btnAction.disabled) return;
-      const isActive = btnAction.dataset.active === "true";
-      if (isActive) {
-        btnAction.dataset.active = "false";
-        panelAction.classList.remove("visible");
+    function clearPressState() {
+      pressActive = false;
+      longPressTriggered = false;
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+      ritualCircle.classList.remove("pressing");
+      breathText.textContent = "一吸 · 一呼 · 一念";
+      if (phoneScreen) {
+        phoneScreen.classList.remove("in-trance");
+      }
+    }
+
+    function handlePressStart(e) {
+      if (mode !== "ritual") return;
+      if (pressActive) return;
+      pressActive = true;
+      longPressTriggered = false;
+      ritualCircle.classList.add("pressing");
+      breathText.textContent = "一吸 · 一呼 · 一念";
+      if (phoneScreen) {
+        phoneScreen.classList.add("in-trance");
+      }
+      pressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        ritualCircle.classList.remove("pressing");
+        performDraw();
+      }, 3000);
+      if (e && e.preventDefault) e.preventDefault();
+    }
+
+    function handlePressEnd() {
+      if (!pressActive) return;
+      if (!longPressTriggered) {
+        clearPressState();
+      }
+    }
+
+    ritualCircle.addEventListener("mousedown", handlePressStart);
+    ritualCircle.addEventListener("touchstart", handlePressStart, { passive: false });
+    window.addEventListener("mouseup", handlePressEnd);
+    window.addEventListener("mouseleave", handlePressEnd);
+    window.addEventListener("touchend", handlePressEnd);
+    window.addEventListener("touchcancel", handlePressEnd);
+
+    btnInsight.addEventListener("click", () => {
+      if (!insightTextEl.textContent.trim()) return;
+      const isVisible = insightArea.classList.contains("visible");
+      if (isVisible) {
+        insightArea.classList.remove("visible");
       } else {
-        btnAction.dataset.active = "true";
-        panelAction.classList.add("visible");
+        insightArea.classList.add("visible");
       }
     });
 
@@ -1031,6 +1201,9 @@
       state.option = "";
       state.reqKey = "";
       lastDrawItem = null;
+      if (userIntentInput) {
+        userIntentInput.value = "";
+      }
 
       clearSelection(sceneRow, ".choice-pill");
       subsceneRow.innerHTML =
